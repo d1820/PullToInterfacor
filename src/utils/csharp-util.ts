@@ -1,6 +1,5 @@
 import { TextEditor } from 'vscode';
 import { IWindow } from '../interfaces/window.interface';
-import { match } from 'assert';
 
 /**
  * Extracts the namespace of the model.
@@ -31,13 +30,16 @@ export const getClassName = (text: string, window: IWindow): string | null => {
 
 export const getInheritedNames = (text: string, window: IWindow): string[] => {
   // Search for the first word after "public class" to find the name of the model.
+  // ex) public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
+  // matches BaseClass, IMyClass, IMyTypedClass<string>
   const inheritedNames = text.match(/:(.*?)(?:\bwhere\b|$)/);
   if (!inheritedNames || inheritedNames.length === 0) {
-    window.showErrorMessage('Could not find the any inherited members.');
+    window.showErrorMessage('Could not find any inherited members.');
     return [];
   }
   const names = inheritedNames[1].split(',');
-  const cleanedNames = names.map(n => n.replace(/\s/g, ''));
+  // matches any spaces or generic types <TType>
+  const cleanedNames = names.map(n => n.replace(/\s|\<.*\>/g, ''));
   return cleanedNames;
 };
 
@@ -48,7 +50,7 @@ export const getCurrentLine = (editor: TextEditor): string | null => {
 
     // Get the line of text where the cursor is currently positioned
     const currentLine = editor.document.lineAt(cursorPosition.line).text;
-    return currentLine;
+    return currentLine.trim();
   }
   return null;
 };
@@ -59,18 +61,20 @@ export const getPropertySignatureText = (editor: TextEditor): string | null => {
     // Get the position of the cursor
     const cursorPosition = editor.selection.active;
     let line = cursorPosition.line;
-    let publicMatch = isPublicLine(editor, line);
+    let currentLine = editor.document.lineAt(line).text;
+    let publicMatch = isPublicLine(currentLine);
     if (publicMatch) {
-      signature = getPublicPropertyLine(editor, line);
+      signature = getStartOfCodeBlock('public', editor, line);
     } else {
-      while (!publicMatch && !isEmptyLine(editor, line)) {
+      while (!publicMatch && !isTerminating(currentLine)) {
         if (line < 1) {
           break;
         }
         line = line - 1;
-        publicMatch = isPublicLine(editor, line);
+        currentLine = editor.document.lineAt(line).text;
+        publicMatch = isPublicLine(currentLine);
         if (publicMatch) {
-          signature = getPublicPropertyLine(editor, line);
+          signature = getStartOfCodeBlock('public', editor, line);
           break;
         }
       }
@@ -89,18 +93,20 @@ export const getMethodSignatureText = (editor: TextEditor): string | null => {
     // Get the position of the cursor
     const cursorPosition = editor.selection.active;
     let line = cursorPosition.line;
-    let publicMatch = isPublicLine(editor, line);
+    let currentLine = editor.document.lineAt(line).text;
+    let publicMatch = isPublicLine(currentLine);
     if (publicMatch) {
-      signature = getPublicMethodLine(editor, line);
+      signature = getStartOfCodeBlock('public', editor, line);
     } else {
-      while (!publicMatch && !isEmptyLine(editor, line)) {
+      while (!publicMatch && !isTerminating(currentLine)) {
         if (line < 1) {
           break;
         }
         line = line - 1;
-        publicMatch = isPublicLine(editor, line);
+        currentLine = editor.document.lineAt(line).text;
+        publicMatch = isPublicLine(currentLine);
         if (publicMatch) {
-          signature = getPublicMethodLine(editor, line);
+          signature = getStartOfCodeBlock('public', editor, line);
           break;
         }
       }
@@ -113,7 +119,7 @@ export const getMethodSignatureText = (editor: TextEditor): string | null => {
   return isMethod(signature) ?  signature : null;
 };
 
-const isMethod = (signature: string | null): boolean => {
+export const isMethod = (signature: string | null): boolean => {
   if (!signature) {
     return false;
   }
@@ -124,45 +130,36 @@ const isMethod = (signature: string | null): boolean => {
   return false;
 };
 
-const getPublicPropertyLine = (editor: TextEditor, startingLine: number): string | null => {
-  let sig: string | null = null;
-  let lines: string = '';
-  while (lines.indexOf('{') === -1) {
-    lines = lines + editor.document.lineAt(startingLine).text;
-    startingLine++;
-  }
-  const regex = /(public[\s\S]*?)\{/;
-  const signatureMatch = lines.match(regex);
-  if (signatureMatch) {
-    sig = signatureMatch[1];
-  }
-  return sig;
-};
 
 const getFullProperty = (line: string) => {
   const regex = /public\s+\w+\s+[\w+\s*]*\{[\W\s]*get[\W\s]*\{[\W\s]*.*[\W\s]*\}[\W\s]*set[\W\s]*\{[\W\s]*.*[\W\s]*\}[\W\s]*/;
-}
+};
 
 const getExplicitSetProperty = () => {
   const regex = /public\s+\w+\s+\w+\s*\{\s*get\s*=>[^}]*\s*set\s*=>[^}]*\s*\}/;
-}
+};
 
 const getAutoProperty = () => {
   const regex = /public\s+\w+\s+\w+\s*\{\s*get;\s*set;\s*\}/;
-}
+};
 
 const getReadOnlyAutoProperty = () => {
   const regex = /public\s+\w+\s+\w+\s*=>\s*((?:\w+;\s*)|\s*\w+\s*\{\s*.*?\}\s*)/;
-}
+};
 
-const getPublicMethodLine = (editor: TextEditor, startingLine: number): string | null => {
+const getMethod = () => {
+  //const regex = /public[\s\S]*?\{(?>[^{}]+|(?<open>{)|(?<-open>}))*\}/;
+  //Todo: bracket count nd capture
+};
+
+const getStartOfCodeBlock = (accessor: string, editor: TextEditor, startingLine: number): string | null => {
   let sig: string | null = null;
   let lines: string = '';
   while (lines.indexOf('{') === -1) {
     lines = lines + editor.document.lineAt(startingLine).text;
     startingLine++;
   }
-  const regex = /(public[\s\S]*?)\{/;
+  const regex = `/(${accessor}[\s\S]*?)\{|(\=\>)`;
   const signatureMatch = lines.match(regex);
   if (signatureMatch) {
     sig = signatureMatch[1];
@@ -170,8 +167,7 @@ const getPublicMethodLine = (editor: TextEditor, startingLine: number): string |
   return sig;
 };
 
-const isPublicLine = (editor: TextEditor, line: number): boolean => {
-  let currentLine = editor.document.lineAt(line).text;
+export const isPublicLine = (currentLine: string): boolean => {
   const publicMatch = currentLine.match(/public\s/);
   if (publicMatch) {
     return true;
@@ -179,8 +175,7 @@ const isPublicLine = (editor: TextEditor, line: number): boolean => {
   return false;
 };
 
-const isEmptyLine = (editor: TextEditor, line: number): boolean => {
-  let currentLine = editor.document.lineAt(line).text;
+export const isTerminating = (currentLine: string): boolean => {
   const match = currentLine.match(/\n|\r|\}|private|protected|internal|^$/);
   if (match) {
     return true;

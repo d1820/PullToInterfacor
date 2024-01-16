@@ -4,7 +4,7 @@ import { WorkspaceFolder } from 'vscode';
 import * as vscode from 'vscode';
 import { getWorkspaceFolder } from './utils/workspace-util';
 import { workspace } from 'vscode';
-import { execute } from './pull-to-interface';
+import { execute } from './pull-to-interface-csharp';
 import { IWindow } from './interfaces/window.interface';
 
 // This method is called when your extension is activated

@@ -7,6 +7,11 @@ namespace Sample
 {
     public interface IMyClass
     {
-        
+
+    }
+
+    public interface IMyTypedClass<TType>
+    {
+
     }
 }
