@@ -1,11 +1,6 @@
 import { TextEditor } from 'vscode';
 import { IWindow } from '../interfaces/window.interface';
 
-/**
- * Extracts the namespace of the model.
- *
- * @param text The model text
- */
 export const getNamespace = (text: string, window: IWindow): string | null => {
   // Search for words after "namespace".
   const namespace = text.match(/(?<=\bnamespace\s)(.+)/);
@@ -64,7 +59,7 @@ export const getPropertySignatureText = (editor: TextEditor): string | null => {
     let currentLine = editor.document.lineAt(line).text;
     let publicMatch = isPublicLine(currentLine);
     if (publicMatch) {
-      signature = getStartOfCodeBlock('public', editor, line);
+      signature = getFullSignatureOfLine('public', editor, line);
     } else {
       while (!publicMatch && !isTerminating(currentLine)) {
         if (line < 1) {
@@ -74,17 +69,18 @@ export const getPropertySignatureText = (editor: TextEditor): string | null => {
         currentLine = editor.document.lineAt(line).text;
         publicMatch = isPublicLine(currentLine);
         if (publicMatch) {
-          signature = getStartOfCodeBlock('public', editor, line);
+          signature = getFullSignatureOfLine('public', editor, line);
           break;
         }
       }
     }
     if (signature) {
-      signature = signature.replace(/public|\s{2,}[\r\n]*/gm, '').trim();
+      signature = cleanString(signature);
+      signature = cleanAccessor('public', signature!);
     }
   }
 
-  return isMethod(signature) ?  signature : null;
+  return isMethod(signature) ? null : signature;
 };
 
 export const getMethodSignatureText = (editor: TextEditor): string | null => {
@@ -96,7 +92,7 @@ export const getMethodSignatureText = (editor: TextEditor): string | null => {
     let currentLine = editor.document.lineAt(line).text;
     let publicMatch = isPublicLine(currentLine);
     if (publicMatch) {
-      signature = getStartOfCodeBlock('public', editor, line);
+      signature = getFullSignatureOfLine('public', editor, line);
     } else {
       while (!publicMatch && !isTerminating(currentLine)) {
         if (line < 1) {
@@ -106,17 +102,34 @@ export const getMethodSignatureText = (editor: TextEditor): string | null => {
         currentLine = editor.document.lineAt(line).text;
         publicMatch = isPublicLine(currentLine);
         if (publicMatch) {
-          signature = getStartOfCodeBlock('public', editor, line);
+          signature = getFullSignatureOfLine('public', editor, line);
           break;
         }
       }
     }
     if (signature) {
-      signature = signature.replace(/public|\s{2,}[\r\n]*/gm, '').trim();
+      signature = cleanString(signature);
+      signature = cleanAccessor('public', signature!);
     }
   }
 
-  return isMethod(signature) ?  signature : null;
+  return isMethod(signature) ? signature : null;
+};
+
+export const cleanString = (str: string | null): string | null => {
+  if (!str) {
+    return str;
+  }
+  const regex = /\s{2,}[\r\n]*/gm;
+  return str.replace(regex, '').trim();
+};
+
+export const cleanAccessor = (accessor: string, str: string | null): string | null => {
+  if (!str) {
+    return str;
+  }
+  const regex = new RegExp(`${accessor}`,'gm');
+  return str.replace(regex, '').trim();
 };
 
 export const isMethod = (signature: string | null): boolean => {
@@ -130,12 +143,11 @@ export const isMethod = (signature: string | null): boolean => {
   return false;
 };
 
-
-const getFullProperty = (line: string) => {
+const getFullBracketProperty = (line: string) => {
   const regex = /public\s+\w+\s+[\w+\s*]*\{[\W\s]*get[\W\s]*\{[\W\s]*.*[\W\s]*\}[\W\s]*set[\W\s]*\{[\W\s]*.*[\W\s]*\}[\W\s]*/;
 };
 
-const getExplicitSetProperty = () => {
+const getFullLambdaProperty = () => {
   const regex = /public\s+\w+\s+\w+\s*\{\s*get\s*=>[^}]*\s*set\s*=>[^}]*\s*\}/;
 };
 
@@ -152,19 +164,21 @@ const getMethod = () => {
   //Todo: bracket count nd capture
 };
 
-const getStartOfCodeBlock = (accessor: string, editor: TextEditor, startingLine: number): string | null => {
+//This gets the signature based on the cursor being on the top method or property line, not in the body of the member
+export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, startingLine: number): string | null => {
   let sig: string | null = null;
-  let lines: string = '';
-  while (lines.indexOf('{') === -1) {
+  let lines: string | null = '';
+  while (lines.indexOf('{') === -1 && lines.indexOf(';') === -1) {
     lines = lines + editor.document.lineAt(startingLine).text;
     startingLine++;
   }
-  const regex = `/(${accessor}[\s\S]*?)\{|(\=\>)`;
-  const signatureMatch = lines.match(regex);
+  lines = cleanString(lines);
+  const regex = new RegExp(`(${accessor}[\\s\\S]*?)({|\\=\\>)`);
+  const signatureMatch = lines?.match(regex);
   if (signatureMatch) {
     sig = signatureMatch[1];
   }
-  return sig;
+  return cleanString(sig);
 };
 
 export const isPublicLine = (currentLine: string): boolean => {

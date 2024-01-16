@@ -1,55 +1,10 @@
 import { Position, Selection, TextEditor, Uri } from 'vscode';
-import { getClassName, getCurrentLine, getInheritedNames, getNamespace, isMethod, isPublicLine, isTerminating } from './csharp-util';
+import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isPublicLine, isTerminating, getMethodSignatureText, getPropertySignatureText } from './csharp-util';
 
 import * as vscodeMock from 'jest-mock-vscode';
 import { MockTextEditor } from 'jest-mock-vscode/dist/vscode';
+import { testFile } from '../test/test-class';
 
-const testFile = `using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace Sample
-{
-    public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
-    {
-        private string fullProperty;
-        public int MyProperty { get; set; }
-        public int MyProperty => 5;
-        public string FullProperty
-        {
-            get => fullProperty;
-            set => fullProperty = value;
-        }
-        public string FullPropertyAlt
-        {
-            get
-            {
-                return fullProperty;
-            }
-            set
-            {
-                fullProperty = value;
-            }
-        }
-        public Task<int> GetNewIdAsync<TNewType>(string name,
-                                                    string address,
-                                                    string city,
-                                                    string state) where TNewType : TType
-        {
-            Console.WriteLine("tester");
-            var coll = new List<string>();
-            if (1 == 1)
-            {
-                foreach (var item in coll)
-                {
-
-                }
-            }
-        }
-    }
-}
-`;
 
 describe('CSharp Util', () => {
 
@@ -269,7 +224,6 @@ describe('CSharp Util', () => {
     });
   });
 
-
   describe('getCurrentLine', () => {
     it('should return current line where cursor is positioned', () => {
       // Act
@@ -291,6 +245,145 @@ describe('CSharp Util', () => {
 
   });
 
+  describe('getStartOfCodeBlock', () => {
+    it('should return current method line where cursor is positioned', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const result = getFullSignatureOfLine('public', editor, 28);
+
+      // Assert
+      expect(result).toEqual('public Task<int> GetNewIdAsync<TNewType>(string name,string address,string city,string state) where TNewType : TType');
+    });
+
+    it('should return current read only property line where cursor is positioned', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const result = getFullSignatureOfLine('public', editor, 11);
+
+      // Assert
+      expect(result).toEqual('public int MyPropertyLamda');
+    });
+
+    it('should return current full property line where cursor is positioned', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const result = getFullSignatureOfLine('public', editor, 17);
+
+      // Assert
+      expect(result).toEqual('public string FullPropertyAlt');
+    });
+
+    it('should return null when no matching signature', () => {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const result = getFullSignatureOfLine('protected', editor, 28);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+  });
+
+  describe('getMethodSignatureText', () => {
+    it('should return current method line when cursor is positioned in the member body', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(37, 0)));
+
+      const result = getMethodSignatureText(editor);
+
+      // Assert
+      expect(result).toEqual('Task<int> GetNewIdAsync<TNewType>(string name,string address,string city,string state) where TNewType : TType');
+    });
+
+    it('should return null when when cursor is positioned in property', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(21, 0)));
+
+      const result = getMethodSignatureText(editor);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+    it('should return null  when cursor is positioned in full lambda property', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(14, 0)));
+
+      const result = getMethodSignatureText(editor);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+  });
+
+  describe('getPropertySignatureText', () => {
+    it('should return null when cursor is positioned in the method body', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(37, 0)));
+
+      const result = getPropertySignatureText(editor);
+
+      // Assert
+      expect(result).toBeNull();
+    });
+
+    it('should return current full property line when when cursor is positioned in property', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(21, 0)));
+
+      const result = getPropertySignatureText(editor);
+
+      // Assert
+      expect(result).toEqual('string FullPropertyAlt');
+    });
+
+    it('should return current auto property line when when cursor is positioned in property', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(10, 0)));
+
+      const result = getPropertySignatureText(editor);
+
+      // Assert
+      expect(result).toEqual('int MyProperty');
+    });
+
+    it('should return current lamda read only property line when when cursor is positioned in property', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(11, 0)));
+
+      const result = getPropertySignatureText(editor);
+
+      // Assert
+      expect(result).toEqual('int MyPropertyLamda');
+    });
+
+    it('should return current full lambda property line  when cursor is positioned in full lambda property', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(14, 0)));
+
+      const result = getPropertySignatureText(editor);
+
+      // Assert
+      expect(result).toEqual('string FullProperty');
+    });
+
+  });
 
 });
 
