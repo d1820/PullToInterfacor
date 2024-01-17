@@ -4,6 +4,7 @@
 		"target": "ES2022",
 		"outDir": "out",
     "skipLibCheck": true,
+    "esModuleInterop": true,
 		"lib": [
 			"ES2022"
 		],

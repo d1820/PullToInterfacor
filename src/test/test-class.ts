@@ -83,8 +83,11 @@ namespace Sample
     public interface IMyClass
     {
         int MyProperty { get; set; }
-        string MyOtherItem { get; set; }
+
+      string MyOtherItem { get; set; }
     }
 }
+
 `
+
 
