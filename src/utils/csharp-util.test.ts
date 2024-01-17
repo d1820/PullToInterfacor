@@ -1,5 +1,5 @@
-import { Position, Selection, TextEditor, Uri } from 'vscode';
-import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isPublicLine, isTerminating, getMethodSignatureText, getPropertySignatureText } from './csharp-util';
+import { Position, Selection, Uri } from 'vscode';
+import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isPublicLine, isTerminating, getMethodSignatureText, getPropertySignatureText, SignatureType, getLineEnding } from './csharp-util';
 
 import * as vscodeMock from 'jest-mock-vscode';
 import { MockTextEditor } from 'jest-mock-vscode/dist/vscode';
@@ -103,7 +103,7 @@ describe('CSharp Util', () => {
   });
 
   describe('getInheritedNames', () => {
-    it('should return the name of the class in the file', () => {
+    it('should return the base class and interfaces in the file when parameter includeBaseClasses is true', () => {
       // Arrange
       const windowMock = {
         showErrorMessage: jest.fn()
@@ -116,10 +116,30 @@ describe('CSharp Util', () => {
       }`;
 
       // Act
-      const name = getInheritedNames(text, windowMock as any);
+      const name = getInheritedNames(text, true, windowMock as any);
 
       // Assert
       expect(name).toEqual(['BaseClass', 'IMyClass', 'IMyTypedClass']);
+      expect(windowMock.showErrorMessage).not.toHaveBeenCalled();
+    });
+
+    it('should return the interfaces only in the file when parameter includeBaseClasses is false', () => {
+      // Arrange
+      const windowMock = {
+        showErrorMessage: jest.fn()
+      };
+      const text = `namespace Test
+      {
+          public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
+          {
+          }
+      }`;
+
+      // Act
+      const name = getInheritedNames(text, false, windowMock as any);
+
+      // Assert
+      expect(name).toEqual(['IMyClass', 'IMyTypedClass']);
       expect(windowMock.showErrorMessage).not.toHaveBeenCalled();
     });
 
@@ -131,7 +151,7 @@ describe('CSharp Util', () => {
       const text = 'foo bar';
 
       // Act
-      const name = getInheritedNames(text, windowMock as any);
+      const name = getInheritedNames(text, true, windowMock as any);
 
       // Assert
       expect(name).toEqual([]);
@@ -254,7 +274,8 @@ describe('CSharp Util', () => {
       const result = getFullSignatureOfLine('public', editor, 28);
 
       // Assert
-      expect(result).toEqual('public Task<int> GetNewIdAsync<TNewType>(string name,string address,string city,string state) where TNewType : TType');
+      expect(result?.signature).toEqual('public Task<int> GetNewIdAsync<TNewType>(string name,string address,string city,string state) where TNewType : TType');
+      expect(result?.signatureType).toEqual(SignatureType.Method);
     });
 
     it('should return current read only property line where cursor is positioned', () => {
@@ -265,7 +286,8 @@ describe('CSharp Util', () => {
       const result = getFullSignatureOfLine('public', editor, 11);
 
       // Assert
-      expect(result).toEqual('public int MyPropertyLamda');
+      expect(result?.signature).toEqual('public int MyPropertyLamda');
+      expect(result?.signatureType).toEqual(SignatureType.LambaProperty);
     });
 
     it('should return current full property line where cursor is positioned', () => {
@@ -276,7 +298,8 @@ describe('CSharp Util', () => {
       const result = getFullSignatureOfLine('public', editor, 17);
 
       // Assert
-      expect(result).toEqual('public string FullPropertyAlt');
+      expect(result?.signature).toEqual('public string FullPropertyAlt');
+      expect(result?.signatureType).toEqual(SignatureType.FullProperty);
     });
 
     it('should return null when no matching signature', () => {
@@ -286,7 +309,8 @@ describe('CSharp Util', () => {
       const result = getFullSignatureOfLine('protected', editor, 28);
 
       // Assert
-      expect(result).toBeNull();
+      expect(result?.signature).toBeNull();
+      expect(result?.signatureType).toEqual(SignatureType.Unknown);
     });
 
   });
@@ -300,7 +324,8 @@ describe('CSharp Util', () => {
       const result = getMethodSignatureText(editor);
 
       // Assert
-      expect(result).toEqual('Task<int> GetNewIdAsync<TNewType>(string name,string address,string city,string state) where TNewType : TType');
+      expect(result?.signature).toEqual('Task<int> GetNewIdAsync<TNewType>(string name,string address,string city,string state) where TNewType : TType');
+      expect(result?.signatureType).toEqual(SignatureType.Method);
     });
 
     it('should return null when when cursor is positioned in property', () => {
@@ -347,7 +372,8 @@ describe('CSharp Util', () => {
       const result = getPropertySignatureText(editor);
 
       // Assert
-      expect(result).toEqual('string FullPropertyAlt');
+      expect(result?.signature).toEqual('string FullPropertyAlt');
+      expect(result?.signatureType).toEqual(SignatureType.FullProperty);
     });
 
     it('should return current auto property line when when cursor is positioned in property', () => {
@@ -358,7 +384,8 @@ describe('CSharp Util', () => {
       const result = getPropertySignatureText(editor);
 
       // Assert
-      expect(result).toEqual('int MyProperty');
+      expect(result?.signature).toEqual('int MyProperty');
+      expect(result?.signatureType).toEqual(SignatureType.FullProperty);
     });
 
     it('should return current lamda read only property line when when cursor is positioned in property', () => {
@@ -369,7 +396,8 @@ describe('CSharp Util', () => {
       const result = getPropertySignatureText(editor);
 
       // Assert
-      expect(result).toEqual('int MyPropertyLamda');
+      expect(result?.signature).toEqual('int MyPropertyLamda');
+      expect(result?.signatureType).toEqual(SignatureType.LambaProperty);
     });
 
     it('should return current full lambda property line  when cursor is positioned in full lambda property', () => {
@@ -380,10 +408,25 @@ describe('CSharp Util', () => {
       const result = getPropertySignatureText(editor);
 
       // Assert
-      expect(result).toEqual('string FullProperty');
+      expect(result?.signature).toEqual('string FullProperty');
+      expect(result?.signatureType).toEqual(SignatureType.FullProperty);
     });
 
   });
+
+  describe('getLineEnding', () => {
+    it('should CRLF as line ending', () => {
+      // Act
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const result = getLineEnding(editor);
+
+      // Assert
+      expect(result).toEqual('\n');
+    });
+  });
+
 
 });
 

@@ -1,5 +1,13 @@
-import { TextEditor } from 'vscode';
+import { EndOfLine, TextEditor, WorkspaceConfiguration } from 'vscode';
 import { IWindow } from '../interfaces/window.interface';
+
+export enum SignatureType {
+  FullProperty,
+  LambaProperty,
+  Method,
+  Unknown
+}
+export type SignatureLineResult = { signature: string | null, signatureType: SignatureType };
 
 export const getNamespace = (text: string, window: IWindow): string | null => {
   // Search for words after "namespace".
@@ -23,7 +31,7 @@ export const getClassName = (text: string, window: IWindow): string | null => {
   return classNames[0];
 };
 
-export const getInheritedNames = (text: string, window: IWindow): string[] => {
+export const getInheritedNames = (text: string, includeBaseClasses: boolean, window: IWindow): string[] => {
   // Search for the first word after "public class" to find the name of the model.
   // ex) public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
   // matches BaseClass, IMyClass, IMyTypedClass<string>
@@ -34,7 +42,10 @@ export const getInheritedNames = (text: string, window: IWindow): string[] => {
   }
   const names = inheritedNames[1].split(',');
   // matches any spaces or generic types <TType>
-  const cleanedNames = names.map(n => n.replace(/\s|\<.*\>/g, ''));
+  let cleanedNames = names.map(n => n.replace(/\s|\<.*\>/g, ''));
+  if (!includeBaseClasses) {
+    cleanedNames = cleanedNames.filter(f => f.startsWith('I'));
+  }
   return cleanedNames;
 };
 
@@ -50,8 +61,8 @@ export const getCurrentLine = (editor: TextEditor): string | null => {
   return null;
 };
 
-export const getPropertySignatureText = (editor: TextEditor): string | null => {
-  let signature: string | null = null;
+export const getPropertySignatureText = (editor: TextEditor): SignatureLineResult | null => {
+  let signatureResult: SignatureLineResult | null = null;
   if (editor) {
     // Get the position of the cursor
     const cursorPosition = editor.selection.active;
@@ -59,7 +70,7 @@ export const getPropertySignatureText = (editor: TextEditor): string | null => {
     let currentLine = editor.document.lineAt(line).text;
     let publicMatch = isPublicLine(currentLine);
     if (publicMatch) {
-      signature = getFullSignatureOfLine('public', editor, line);
+      signatureResult = getFullSignatureOfLine('public', editor, line);
     } else {
       while (!publicMatch && !isTerminating(currentLine)) {
         if (line < 1) {
@@ -69,22 +80,22 @@ export const getPropertySignatureText = (editor: TextEditor): string | null => {
         currentLine = editor.document.lineAt(line).text;
         publicMatch = isPublicLine(currentLine);
         if (publicMatch) {
-          signature = getFullSignatureOfLine('public', editor, line);
+          signatureResult = getFullSignatureOfLine('public', editor, line);
           break;
         }
       }
     }
-    if (signature) {
-      signature = cleanString(signature);
-      signature = cleanAccessor('public', signature!);
+    if (signatureResult?.signature) {
+      signatureResult.signature = cleanString(signatureResult.signature);
+      signatureResult.signature = cleanAccessor('public', signatureResult.signature!);
     }
   }
 
-  return isMethod(signature) ? null : signature;
+  return isMethod(signatureResult?.signature) ? null : signatureResult;
 };
 
-export const getMethodSignatureText = (editor: TextEditor): string | null => {
-  let signature: string | null = null;
+export const getMethodSignatureText = (editor: TextEditor): SignatureLineResult | null => {
+  let signatureResult: SignatureLineResult | null = null;
   if (editor) {
     // Get the position of the cursor
     const cursorPosition = editor.selection.active;
@@ -92,7 +103,7 @@ export const getMethodSignatureText = (editor: TextEditor): string | null => {
     let currentLine = editor.document.lineAt(line).text;
     let publicMatch = isPublicLine(currentLine);
     if (publicMatch) {
-      signature = getFullSignatureOfLine('public', editor, line);
+      signatureResult = getFullSignatureOfLine('public', editor, line);
     } else {
       while (!publicMatch && !isTerminating(currentLine)) {
         if (line < 1) {
@@ -102,18 +113,18 @@ export const getMethodSignatureText = (editor: TextEditor): string | null => {
         currentLine = editor.document.lineAt(line).text;
         publicMatch = isPublicLine(currentLine);
         if (publicMatch) {
-          signature = getFullSignatureOfLine('public', editor, line);
+          signatureResult = getFullSignatureOfLine('public', editor, line);
           break;
         }
       }
     }
-    if (signature) {
-      signature = cleanString(signature);
-      signature = cleanAccessor('public', signature!);
+    if (signatureResult?.signature) {
+      signatureResult.signature = cleanString(signatureResult.signature);
+      signatureResult.signature = cleanAccessor('public', signatureResult.signature!);
     }
   }
 
-  return isMethod(signature) ? signature : null;
+  return isMethod(signatureResult?.signature) ? signatureResult : null;
 };
 
 export const cleanString = (str: string | null): string | null => {
@@ -128,11 +139,11 @@ export const cleanAccessor = (accessor: string, str: string | null): string | nu
   if (!str) {
     return str;
   }
-  const regex = new RegExp(`${accessor}`,'gm');
+  const regex = new RegExp(`${accessor}`, 'gm');
   return str.replace(regex, '').trim();
 };
 
-export const isMethod = (signature: string | null): boolean => {
+export const isMethod = (signature: string | null | undefined): boolean => {
   if (!signature) {
     return false;
   }
@@ -165,7 +176,7 @@ const getMethod = () => {
 };
 
 //This gets the signature based on the cursor being on the top method or property line, not in the body of the member
-export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, startingLine: number): string | null => {
+export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, startingLine: number): SignatureLineResult | null => {
   let sig: string | null = null;
   let lines: string | null = '';
   while (lines.indexOf('{') === -1 && lines.indexOf(';') === -1) {
@@ -178,7 +189,21 @@ export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, sta
   if (signatureMatch) {
     sig = signatureMatch[1];
   }
-  return cleanString(sig);
+  let sigType = SignatureType.Unknown;
+  if (lines) {
+    if (lines.indexOf('(') > -1) {
+      sigType = SignatureType.Method;
+    } else if (lines.indexOf('{') > -1) {
+      sigType = SignatureType.FullProperty; //this is an assumption
+    } else if (lines.indexOf('=>') > -1) {
+      sigType = SignatureType.LambaProperty;
+    }
+  }
+  const cleaned = cleanString(sig);
+  if (!cleaned) {
+    sigType = SignatureType.Unknown;
+  }
+  return { signature: cleaned, signatureType: sigType };
 };
 
 export const isPublicLine = (currentLine: string): boolean => {
@@ -195,4 +220,12 @@ export const isTerminating = (currentLine: string): boolean => {
     return true;
   }
   return false;
+};
+
+export const getLineEnding = (editor: TextEditor): string => {
+  const document = editor.document;
+  if (EndOfLine.CRLF === document.eol) {
+    return '\r\n';
+  }
+  return '\n';
 };

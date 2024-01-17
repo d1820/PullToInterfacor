@@ -5,11 +5,11 @@ using System.Threading.Tasks;
 
 namespace Sample
 {
-    public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
+    public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string>, ITest where TType : class
     {
         private string fullProperty;
         public int MyProperty { get; set; }
-        public int MyProperty => 5;
+        public int MyPropertyLamda => 5;
         public string FullProperty
         {
             get => fullProperty;

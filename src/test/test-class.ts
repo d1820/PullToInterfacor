@@ -44,3 +44,47 @@ namespace Sample
     }
 }
 `;
+
+export const testFileBasedNamespace = `using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Sample;
+
+public interface IBaseClass
+{
+
+}
+`;
+
+export const interfaceFile = `using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Sample
+{
+    public interface IMyClass
+    {
+      string MyOtherItem { get; set; }
+    }
+}
+
+`
+
+export const expectedInterfaceFile = `using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Sample
+{
+    public interface IMyClass
+    {
+        int MyProperty { get; set; }
+        string MyOtherItem { get; set; }
+    }
+}
+`
+

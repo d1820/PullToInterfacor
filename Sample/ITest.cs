@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Sample
 {
-    public interface IMyClass
+    public interface ITest
     {
 
     }
