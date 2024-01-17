@@ -1,4 +1,4 @@
-import { EndOfLine, TextEditor, WorkspaceConfiguration } from 'vscode';
+import { EndOfLine, TextEditor } from 'vscode';
 import { IWindow } from '../interfaces/window.interface';
 
 export enum SignatureType {

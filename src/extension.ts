@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { getWorkspaceFolder } from './utils/workspace-util';
 import * as csharp from './pull-to-interface-csharp';
 import { IWindow } from './interfaces/window.interface';
-import { SignatureLineResult, SignatureType, getLineEnding } from './utils/csharp-util';
+import {  SignatureType, getLineEnding } from './utils/csharp-util';
 
 
 const extensionName = 'pulltointerfacor.pullto';

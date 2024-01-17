@@ -91,5 +91,3 @@ export const addMemberToInterface = (subcommand: string, signatureResult: Signat
     return null;
   }
 }
-
-
