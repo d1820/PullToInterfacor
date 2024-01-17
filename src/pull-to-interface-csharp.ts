@@ -17,6 +17,10 @@ export const getSubCommands = (workspaceRoot: string, window: IWindow): string[]
   if (!className) { return []; };
 
   const inheritedNames = getInheritedNames(text, false, window);
+
+  //TODO recuse through each interface to look for all sub interfaces
+
+
   return inheritedNames;
 };
 
