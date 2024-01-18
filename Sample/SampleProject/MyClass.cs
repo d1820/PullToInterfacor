@@ -2,13 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Test;
 
+
+namespace Test
+{
+    public class TestEntity
+    {
+
+    }
+}
 namespace Sample
 {
+
     public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string>, ITest where TType : class
     {
         private string fullProperty;
-        public int MyProperty { get; set; }
+        public TestEntity MyProperty { get; set; }
         public int MyPropertyLamda => 5;
         public string FullProperty
         {
@@ -26,7 +36,7 @@ namespace Sample
                 fullProperty = value;
             }
         }
-        public Task<int> GetNewIdAsync<TNewType>(string name,
+        public Task<TestEntity> GetNewIdAsync<TNewType>(string name,
                                                     string address,
                                                     string city,
                                                     string state) where TNewType : TType

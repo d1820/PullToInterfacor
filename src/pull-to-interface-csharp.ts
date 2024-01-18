@@ -1,9 +1,9 @@
 import { Range, TextEditor, Uri, WorkspaceEdit, workspace } from "vscode";
 import { IWindow } from "./interfaces/window.interface";
-import { getClassName, getInheritedNames, getNamespace, getMethodSignatureText, getPropertySignatureText, SignatureType, SignatureLineResult } from "./utils/csharp-util";
+import { getClassName, getInheritedNames, getNamespace, getMethodSignatureText, getPropertySignatureText, SignatureType, SignatureLineResult, getUsingStatementsFromText, replaceUsingStatementsFromText, getBeginningOfLineIndent } from "./utils/csharp-util";
 import { isTextEditorOpen, isTextInEditor, isWorkspaceLoaded } from "./utils/workspace-util";
 
-export const getSubCommands = (workspaceRoot: string, window: IWindow): string[] => {
+export const getSubCommandsAsync = async (workspaceRoot: string, window: IWindow): Promise<string[]> => {
   if (!isWorkspaceLoaded(workspaceRoot, window)) { return []; };
   if (!isTextEditorOpen(window)) { return []; };
 
@@ -16,13 +16,25 @@ export const getSubCommands = (workspaceRoot: string, window: IWindow): string[]
   const className = getClassName(text, window);
   if (!className) { return []; };
 
-  const inheritedNames = getInheritedNames(text, false, window);
+  let inheritedNames = getInheritedNames(text, true);
 
-  //TODO recuse through each interface to look for all sub interfaces
-
-
-  return inheritedNames;
+  inheritedNames = await lookForSubInheritedNamesAsync(inheritedNames);
+  const cleanedNames = inheritedNames.filter(f => f.startsWith('I')); //Filter base classes for now
+  return [...new Set(cleanedNames)];
 };
+
+const lookForSubInheritedNamesAsync = async (inheritedNames: string[]): Promise<string[]> => {
+  for (const fileName of inheritedNames) {
+    const files = await workspace.findFiles(`**/${fileName}.cs`, '**/node_modules/**');
+    const document = await workspace.openTextDocument(files[0].path);
+    const text = document.getText();
+    const subInheritedNames = getInheritedNames(text, true);
+    if (subInheritedNames.length > 0) {
+      inheritedNames = [...inheritedNames, ...subInheritedNames, ...(await lookForSubInheritedNamesAsync(subInheritedNames))];
+    }
+  };
+  return inheritedNames;
+}
 
 export const getSignatureToPull = (editor: TextEditor): SignatureLineResult | null => {
   const propertySignature = getPropertySignatureText(editor);
@@ -31,9 +43,9 @@ export const getSignatureToPull = (editor: TextEditor): SignatureLineResult | nu
 
   if (propertySignature?.signature) {
     if (propertySignature.signatureType === SignatureType.FullProperty) {
-      return { signature: `${propertySignature.signature} {get;set;}`, signatureType: propertySignature.signatureType };
+      return { signature: `${propertySignature.signature} { get; set; }`, signatureType: propertySignature.signatureType };
     }
-    return { signature: `${propertySignature.signature} {get;}`, signatureType: propertySignature.signatureType };
+    return { signature: `${propertySignature.signature} { get; }`, signatureType: propertySignature.signatureType };
   }
 
   if (methodSignature?.signature) {
@@ -44,18 +56,7 @@ export const getSignatureToPull = (editor: TextEditor): SignatureLineResult | nu
   return null;
 };
 
-export const readContents = async (filePath: string): Promise<string | undefined> => {
-  try {
-    const document = await workspace.openTextDocument(filePath);
-    const text = document.getText();
-    return text;
-  } catch (error) {
-    console.error(`Error reading file contents: ${error}`);
-    return undefined;
-  }
-};
-
-export const replaceFileContent = async (filePath: string, newFileContent: string): Promise<boolean> => {
+export const applyEditsAsync = async (filePath: string, newFileContent: string): Promise<boolean> => {
   const edit = new WorkspaceEdit();
   const uri = Uri.file(filePath);
 
@@ -66,14 +67,18 @@ export const replaceFileContent = async (filePath: string, newFileContent: strin
   return await workspace.applyEdit(edit);
 };
 
-export const getIndent = (): number => {
+export const getEditorDefaultIndent = (): number => {
   const editorConfig = workspace.getConfiguration('editor');
   return editorConfig.get<number>('tabSize', 4); // Default to 4 spaces
 };
 
-export const addMemberToInterface = (subcommand: string, signatureResult: SignatureLineResult, eol: string, interfaceFileContent: string | undefined): string | null => {
+export const addMemberToInterface = (subcommand: string,
+  signatureResult: SignatureLineResult,
+  eol: string,
+  interfaceFileContent: string): string => {
+
   if (!signatureResult.signature) {
-    return null;
+    return interfaceFileContent;
   }
   const interfaceRegEx = new RegExp(`(.*public\\s*interface\\s*${subcommand}[\\s]*{)`);
   const interfaceMatchedMember = interfaceFileContent!.match(interfaceRegEx);
@@ -81,17 +86,30 @@ export const addMemberToInterface = (subcommand: string, signatureResult: Signat
   if (interfaceMatchedMember) {
     const originalText = interfaceMatchedMember[1]; //group from regex
     //get the indent count
-    const spaceCountRegex = /^[\r\n]*(\s*)/;
-    const count = originalText.match(spaceCountRegex);
+    const beginningIndent = getBeginningOfLineIndent(originalText);
     let totalLength = signatureResult.signature.length;
-    const indent = getIndent();
-    if (count && count.length > 1) {
-      totalLength = totalLength + count[1].length + indent;
-    }
+    const indent = getEditorDefaultIndent();
+    totalLength = totalLength + beginningIndent + indent;
     const newText = `${originalText}${eol}${signatureResult.signature.padStart(totalLength, ' ')}${eol}`;
     interfaceFileContent = interfaceFileContent!.replace(interfaceRegEx, newText);
     return interfaceFileContent;
   } else {
-    return null;
+    return interfaceFileContent;
   }
+}
+
+export const addUsingsToInterface = (
+  eol: string,
+  interfaceFileContent: string,
+  usings: string[]): string => {
+
+  if (!interfaceFileContent) {
+    return interfaceFileContent;
+  }
+  //add the usings to file content
+  const existingInterfaceUsings = getUsingStatementsFromText(interfaceFileContent);
+  let combinedUsings = [...usings, ...existingInterfaceUsings];
+  combinedUsings = [...new Set(combinedUsings)]; //distinct
+  interfaceFileContent = replaceUsingStatementsFromText(interfaceFileContent, combinedUsings, eol);
+  return interfaceFileContent;
 }

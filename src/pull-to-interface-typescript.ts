@@ -17,7 +17,7 @@ export const execute = (workspaceRoot: string, window: IWindow, context: Extensi
   const className = getClassName(text, window);
   if (!className) { return; };
 
-  const inheritedNames = getInheritedNames(text, false, window);
+  const inheritedNames = getInheritedNames(text, false);
   console.log('🚀 ~ execute ~ inheritedNames:', inheritedNames);
 
 };

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace Sample
 {
-    public interface ITest
+    public interface ITest: IInternalTest
     {
 
     }

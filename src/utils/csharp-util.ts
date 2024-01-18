@@ -31,13 +31,24 @@ export const getClassName = (text: string, window: IWindow): string | null => {
   return classNames[0];
 };
 
-export const getInheritedNames = (text: string, includeBaseClasses: boolean, window: IWindow): string[] => {
+export const getMemberName = (text: string): string | undefined => {
+  const memberRegEx = new RegExp('\\w*.*(?=[\\{\\(])', 'gm');
+  // Search for the first word after "public class" to find the name of the model.
+  const memberNameMatches = text.match(memberRegEx);
+  if (!memberNameMatches) {
+    return undefined;
+  }
+  const name = memberNameMatches[0].trim().split(' ').pop();
+  return name;
+};
+
+export const getInheritedNames = (text: string, includeBaseClasses: boolean): string[] => {
   // Search for the first word after "public class" to find the name of the model.
   // ex) public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
   // matches BaseClass, IMyClass, IMyTypedClass<string>
-  const inheritedNames = text.match(/:(.*?)(?:\bwhere\b|$)/);
-  if (!inheritedNames || inheritedNames.length === 0) {
-    window.showErrorMessage('Could not find any inherited members.');
+  const rr = new RegExp(':(.*?)(?:\\bwhere\\b|\\{|$)', 'gm')
+  const inheritedNames = rr.exec(text);
+  if (!inheritedNames || inheritedNames.length <= 1) {
     return [];
   }
   const names = inheritedNames[1].split(',');
@@ -185,7 +196,7 @@ export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, sta
   }
   lines = cleanString(lines);
   const regex = new RegExp(`(${accessor}[\\s\\S]*?)({|\\=\\>)`);
-  const signatureMatch = lines?.match(regex);
+  const signatureMatch = lines ? regex.exec(lines) : null;
   if (signatureMatch) {
     sig = signatureMatch[1];
   }
@@ -229,3 +240,38 @@ export const getLineEnding = (editor: TextEditor): string => {
   }
   return '\n';
 };
+
+export const getUsingStatements = (editor: TextEditor): string[] => {
+  const document = editor.document;
+  const docText = document.getText();
+  return getUsingStatementsFromText(docText);
+};
+
+export const getUsingStatementsFromText = (docText: string): string[] => {
+  const usingRegex = new RegExp('using.*;[\r\n*]', 'gm');
+  const matches = docText.match(usingRegex);
+  return matches?.map(m => m) || [];
+};
+
+export const replaceUsingStatementsFromText = (docText: string, newUsings: string[], eol: string): string => {
+  const usingRegex = new RegExp('^using.*;[\r\n*]', 'gm');
+  const u = newUsings.join('');
+  let cleared = docText.replace(usingRegex, '');
+  cleared = u + eol + cleared;
+  return cleared;
+};
+
+export const getBeginningOfLineIndent = (text: string): number => {
+  const spaceCountRegex = /^[\r\n]*(\s*)/;
+  const count = text.match(spaceCountRegex);
+  if (count && count.length > 1) {
+    return count[1].length;
+  }
+  return 0;
+};
+
+export const cleanExcessiveNewLines = (text: string): string => {
+  const newlineRegex = /^\s*$/gm;
+  return text.replace(newlineRegex, '');
+};
+

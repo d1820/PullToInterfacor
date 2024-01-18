@@ -1,5 +1,5 @@
 import { Position, Selection, Uri } from 'vscode';
-import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isPublicLine, isTerminating, getMethodSignatureText, getPropertySignatureText, SignatureType, getLineEnding } from './csharp-util';
+import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isPublicLine, isTerminating, getMethodSignatureText, getPropertySignatureText, SignatureType, getLineEnding, getUsingStatements, replaceUsingStatementsFromText, getUsingStatementsFromText, getMemberName } from './csharp-util';
 
 import * as vscodeMock from 'jest-mock-vscode';
 import { MockTextEditor } from 'jest-mock-vscode/dist/vscode';
@@ -102,60 +102,152 @@ describe('CSharp Util', () => {
     });
   });
 
-  describe('getInheritedNames', () => {
-    it('should return the base class and interfaces in the file when parameter includeBaseClasses is true', () => {
-      // Arrange
-      const windowMock = {
-        showErrorMessage: jest.fn()
-      };
-      const text = `namespace Test
-      {
-          public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
-          {
-          }
-      }`;
+  describe('getMemberName', () => {
+
+    it('should return the name of the property member in the file when property has generic', () => {
+
+      const text = 'public MyClass<string, int> StringTest { get; set; }';
 
       // Act
-      const name = getInheritedNames(text, true, windowMock as any);
+      const name = getMemberName(text);
 
       // Assert
-      expect(name).toEqual(['BaseClass', 'IMyClass', 'IMyTypedClass']);
-      expect(windowMock.showErrorMessage).not.toHaveBeenCalled();
+      expect(name).toBe('StringTest');
     });
 
-    it('should return the interfaces only in the file when parameter includeBaseClasses is false', () => {
-      // Arrange
-      const windowMock = {
-        showErrorMessage: jest.fn()
-      };
-      const text = `namespace Test
-      {
-          public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
-          {
-          }
-      }`;
+    it('should return the name of the property member in the file when property has tuple', () => {
+
+      const text = 'public (street: string, name: string) StringTest { get; set; }';
 
       // Act
-      const name = getInheritedNames(text, false, windowMock as any);
+      const name = getMemberName(text);
 
       // Assert
-      expect(name).toEqual(['IMyClass', 'IMyTypedClass']);
-      expect(windowMock.showErrorMessage).not.toHaveBeenCalled();
+      expect(name).toBe('StringTest');
     });
 
-    it('should return [] and an error message if the model name in the file is not found', () => {
+    it('should return the name of the method member in the file', () => {
+
+      const text = 'public Task<int> StringTest()';
+
+      // Act
+      const name = getMemberName(text);
+
+      // Assert
+      expect(name).toBe('StringTest');
+    });
+
+    it('should return the name of the method member in the file when no accessor is given', () => {
+
+      const text = 'Task<int> StringTest()';
+
+      // Act
+      const name = getMemberName(text);
+
+      // Assert
+      expect(name).toBe('StringTest');
+    });
+
+    it('should return undefined if the member name in the file is not found', () => {
       // Arrange
-      const windowMock = {
-        showErrorMessage: jest.fn()
-      };
       const text = 'foo bar';
 
       // Act
-      const name = getInheritedNames(text, true, windowMock as any);
+      const name = getMemberName(text);
+
+      // Assert
+      expect(name).toBe(undefined);
+    });
+  });
+
+  describe('getInheritedNames', () => {
+    it('should return the base class and interfaces in the file when parameter includeBaseClasses is true', () => {
+
+      const text = `namespace Test
+      {
+          public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
+          {
+          }
+      }`;
+
+      // Act
+      const name = getInheritedNames(text, true);
+
+      // Assert
+      expect(name).toEqual(['BaseClass', 'IMyClass', 'IMyTypedClass']);
+    });
+
+    it('should return the interfaces only in the file when parameter includeBaseClasses is false', () => {
+
+      const text = `namespace Test
+      {
+          public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
+          {
+          }
+      }`;
+
+      // Act
+      const name = getInheritedNames(text, false);
+
+      // Assert
+      expect(name).toEqual(['IMyClass', 'IMyTypedClass']);
+    });
+
+    it('should return [] and an error message if the model name in the file is not found', () => {
+
+      const text = 'foo bar';
+
+      // Act
+      const name = getInheritedNames(text, true);
 
       // Assert
       expect(name).toEqual([]);
-      expect(windowMock.showErrorMessage).toHaveBeenCalled();
+    });
+
+    it('should return the base class interfaces in the file weird scenario', () => {
+
+      const text = `using System;
+      using System.Collections.Generic;
+      using System.Linq;
+      using System.Threading.Tasks;
+
+      namespace Sample
+      {
+          public class BaseClass : IBaseClass
+          {
+
+          }
+      }
+      `;
+
+      // Act
+      const name = getInheritedNames(text, true);
+
+      // Assert
+      expect(name).toEqual(['IBaseClass']);
+    });
+
+    it('should return the base class interfaces in the file weird scenario 2', () => {
+
+      const text = `using System;
+      using System.Collections.Generic;
+      using System.Linq;
+      using System.Threading.Tasks;
+
+      namespace Sample
+      {
+          public class BaseClass : IBaseClass
+          {
+
+          }
+      }
+      `;
+
+      // Act
+      const name = getInheritedNames(text, true);
+
+      // Assert
+      expect(name).toEqual(['IBaseClass']);
     });
   });
 
@@ -427,6 +519,26 @@ describe('CSharp Util', () => {
     });
   });
 
+  describe('getUsingStatements', () => {
+    it('should return array of using statements', () => {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const result = getUsingStatements(editor);
+      expect(result).toHaveLength(4);
+      expect(result[0]).toEqual('using System;\n');
+    });
+  });
+
+  describe('replaceUsingStatements', () => {
+    it('should return array of using statements', () => {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const result = replaceUsingStatementsFromText(doc.getText(), ['using NoMatch;'], '\n');
+      expect(result).toContain('using NoMatch;');
+      const items = getUsingStatementsFromText(result);
+      expect(items).toHaveLength(1);
+    });
+  });
 
 });
 
