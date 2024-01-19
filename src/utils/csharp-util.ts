@@ -350,9 +350,10 @@ export const getBeginningOfLineIndent = (text: string): number =>
   return 0;
 };
 
-export const cleanExcessiveNewLines = (text: string): string =>
+export const cleanExcessiveNewLines = (text: string, eol: string): string =>
 {
-  const newlineRegex = /^\s*$/gm;
-  return text.replace(newlineRegex, '');
+  const newlineRegex = /^\s{2,}$/gm;
+  text = text.replace(newlineRegex, '');
+  return text.replace('namespace', `${eol}namespace`);
 };
 

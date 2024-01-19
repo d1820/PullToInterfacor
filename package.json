@@ -35,7 +35,8 @@
     "test-jest": "jest",
     "test-jest-watch": "jest --watch",
     "test-jest-coverage": "jest --coverage",
-    "test:integration": "npm run compile && node ./node_modules/vscode/bin/test"
+    "test:integration": "npm run compile && node ./node_modules/vscode/bin/test",
+    "update-toc": "powershell -ExecutionPolicy Unrestricted markdown-toc ./README.md -i --bullets=\"-\" ; Write-Host \"Complete\""
   },
   "devDependencies": {
     "@types/jest": "^25.2.3",

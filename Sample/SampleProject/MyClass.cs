@@ -30,7 +30,7 @@ namespace Sample
         public async Task<int> GetNewIdAsync<TNewType>(string name,
                                                     string address,
                                                     string city,
-                                                    string state) where TNewType : TType
+                                                    string state) where TNewType : class
         {
             Console.WriteLine("starting");
             var coll = new List<string>();

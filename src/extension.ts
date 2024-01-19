@@ -21,7 +21,13 @@ export async function activate(context: vscode.ExtensionContext)
   {
     if (editor && editor.document.languageId === 'csharp')
     {
-      const subCommands = await csharp.getSubCommandsAsync(workspaceRoot, vscode.window as IWindow);
+      let subCommands = await csharp.getSubCommandsAsync(workspaceRoot, vscode.window as IWindow);
+      const signatureResult = csharp.getSignatureToPull(editor, '(public|protected)');
+      if (signatureResult?.accessor === 'protected')
+      {
+        //filter out Interfaces
+        subCommands = subCommands.filter(f => !f.startsWith('I'));
+      }
       buildSubCommands(subCommands, context);
     }
     else
@@ -50,9 +56,10 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
     {
       const disposable = vscode.commands.registerTextEditorCommand(subCommandName, async (editor) =>
       {
-        //check if eligible for pull
-        var signatureResult = csharp.getSignatureToPull(editor, '(public|protected)');
+        const signatureResult = csharp.getSignatureToPull(editor, '(public|protected)');
+        let methodBodySignature: SignatureLineResult | null = null;
 
+        //check if eligible for pull
         if (!signatureResult?.signature || signatureResult.signatureType === SignatureType.Unknown)
         {
           vscode.window.showErrorMessage(`Unsupported pull. Unable to determine what to pull. 'public' properties and 'public' or 'protected' methods are only supported. Please copy manually`);
@@ -66,7 +73,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           vscode.window.showErrorMessage(`More then one file found matching ${subcommand}. Please copy manually`);
           return;
         }
-
+        const eol = getLineEnding(editor);
         const selectedFileDocument = await vscode.workspace.openTextDocument(files[0].path);
         let selectedFileDocumentContent = selectedFileDocument.getText();
         if (!selectedFileDocumentContent)
@@ -75,33 +82,28 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           return;
         }
 
-        if (selectedFileDocumentContent.indexOf(signatureResult.originalSelectedLine.trim()) > -1)
+        if (selectedFileDocumentContent.indexOf(signatureResult.originalSelectedLine.trim() + eol) > -1)
         {
           vscode.window.showWarningMessage(`Member already in ${subcommand}. Skipping pull`);
           return;
         }
         else
         {
-          const eol = getLineEnding(editor);
-
           if (!subcommand.startsWith("I"))
           {
-            if (signatureResult?.signatureType === SignatureType.Method)
+            let currentLine = editor.document.lineAt(signatureResult.lineMatchStartsOn).text;
+            if (currentLine.indexOf("=>") > -1)
             {
-              let currentLine = editor.document.lineAt(signatureResult.lineMatchStartsOn).text;
-              if (currentLine.indexOf("=>") > -1)
-              {
-                const body = getMemberBodyBySemiColon(editor, signatureResult);
-                const methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
-                selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
+              const body = getMemberBodyBySemiColon(editor, signatureResult);
+              methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
+              selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
 
-              }
-              else
-              {
-                const body = getMemberBodyByBrackets(editor, signatureResult);
-                const methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
-                selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
-              }
+            }
+            else
+            {
+              const body = getMemberBodyByBrackets(editor, signatureResult);
+              methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
+              selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
             }
           }
           else
@@ -118,8 +120,8 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           {
             const currentDocumentUsings = getUsingStatements(editor);
             selectedFileDocumentContent = csharp.addUsingsToDocument(eol, selectedFileDocumentContent, currentDocumentUsings);
-            selectedFileDocumentContent = cleanExcessiveNewLines(selectedFileDocumentContent);
-            selectedFileDocumentContent = selectedFileDocumentContent.replace('namespace', `${eol}namespace`);
+            selectedFileDocumentContent = cleanExcessiveNewLines(selectedFileDocumentContent, eol);
+
             const success = await csharp.applyEditsAsync(files[0].path, selectedFileDocumentContent);
             if (!success)
             {
@@ -133,6 +135,27 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
               vscode.window.showWarningMessage(`Unable to save updates to ${subcommand}. Please save file manually`);
               return;
             }
+            if (!subcommand.startsWith("I") && methodBodySignature?.signature)
+            {
+              //remove if from current file
+              const activeFileUrl = editor.document.uri;
+              const currentFileDocument = await vscode.workspace.openTextDocument(activeFileUrl);
+              let currentFileDocumentContent = currentFileDocument.getText();
+              currentFileDocumentContent = currentFileDocumentContent.replace(methodBodySignature.signature + eol, '');
+              //currentFileDocumentContent = cleanExcessiveNewLines(currentFileDocumentContent, eol);
+              const success = await csharp.applyEditsAsync(activeFileUrl.path, currentFileDocumentContent);
+              if (!success)
+              {
+                vscode.window.showErrorMessage(`Unable to remove ${methodBodySignature.signatureType}. Please remove manually`);
+                return;
+              }
+              const wasSaved = await currentFileDocument.save();
+              if (!wasSaved)
+              {
+                vscode.window.showErrorMessage(`Unable to remove ${methodBodySignature.signatureType}. Please remove manually`);
+                return;
+              }
+            }
             const memberName = getMemberName(signatureResult!.signature);
             vscode.window.showInformationMessage(`${memberName} pulled to ${subcommand}`);
           }
@@ -140,27 +163,12 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           {
             vscode.window.showErrorMessage(`Unable to parse file ${subcommand}. Please copy manually`);
           }
-
         }
       });
 
       context.subscriptions.push(disposable);
     }
   });
-
-  // const cacheSubCommand = 'Missing File? Clear Cache';
-  // const cacheCommand = `${extensionName}.${cacheSubCommand}`;
-  // const isCacheCommandRegistered = await isSubcommandRegisteredAsync(cacheCommand);
-  // if (!isCacheCommandRegistered)
-  // {
-  //   const cacheDisposable = vscode.commands.registerTextEditorCommand(cacheCommand, async (editor) =>
-  //   {
-  //     allCommands = null;
-  //   });
-  //   context.subscriptions.push(cacheDisposable);
-  //   subcommands.push(cacheSubCommand);
-  // }
-
   // Show a quick pick to execute subcommands
   const chosenSubcommand = await vscode.window.showQuickPick(subcommands);
 
