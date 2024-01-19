@@ -357,3 +357,19 @@ export const cleanExcessiveNewLines = (text: string, eol: string): string =>
   return text.replace('namespace', `${eol}namespace`);
 };
 
+
+export const checkIfAlreadyPulledToInterface = (text: string, signatureResult: SignatureLineResult, eol: string): boolean =>
+{
+  const testValue = cleanAllAccessors(signatureResult.originalSelectedLine).trim();
+  // if (signatureResult.signatureType === SignatureType.Method)
+  // {
+  //   return text.indexOf(testValue + eol) > -1;
+  // }
+  return text.indexOf(testValue) > -1;
+};
+
+export const cleanAllAccessors = (text: string): string =>
+{
+  let regex = new RegExp(`((public|private|protected|internal|abstract|virtual|override)[\\s]*)`, 'gm');
+  return text.replace(regex,'');
+};

@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { getWorkspaceFolder } from './utils/workspace-util';
 import * as csharp from './pull-to-interface-csharp';
 import { IWindow } from './interfaces/window.interface';
-import { SignatureLineResult, SignatureType, cleanExcessiveNewLines, getLineEnding, getMemberBodyByBrackets, getMemberBodyBySemiColon, getMemberName, getUsingStatements } from './utils/csharp-util';
+import { SignatureLineResult, SignatureType, checkIfAlreadyPulledToInterface, cleanExcessiveNewLines, getLineEnding, getMemberBodyByBrackets, getMemberBodyBySemiColon, getMemberName, getUsingStatements } from './utils/csharp-util';
 
 
 const extensionName = 'pulltointerfacor.pullto';
@@ -82,7 +82,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           return;
         }
 
-        if (selectedFileDocumentContent.indexOf(signatureResult.originalSelectedLine.trim() + eol) > -1)
+        if (checkIfAlreadyPulledToInterface(selectedFileDocumentContent, signatureResult, eol))
         {
           vscode.window.showWarningMessage(`Member already in ${subcommand}. Skipping pull`);
           return;
@@ -142,7 +142,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
               const currentFileDocument = await vscode.workspace.openTextDocument(activeFileUrl);
               let currentFileDocumentContent = currentFileDocument.getText();
               currentFileDocumentContent = currentFileDocumentContent.replace(methodBodySignature.signature + eol, '');
-              //currentFileDocumentContent = cleanExcessiveNewLines(currentFileDocumentContent, eol);
+              currentFileDocumentContent = cleanExcessiveNewLines(currentFileDocumentContent, eol);
               const success = await csharp.applyEditsAsync(activeFileUrl.path, currentFileDocumentContent);
               if (!success)
               {
