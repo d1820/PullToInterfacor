@@ -3,6 +3,9 @@
 ---
 ![GitHub CI](https://github.com/d1820/PullToInterfacor/actions/workflows/node.js.yml/badge.svg)
 ![GitHub License](https://img.shields.io/github/license/d1820/PullToInterfacor?logo=github&logoColor=green)
+![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/stars/DanTurco.PullToInterfacor)
+![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/DanTurco.PullToInterfacor)
+![Visual Studio Marketplace Version (including pre-releases)](https://img.shields.io/visual-studio-marketplace/v/DanTurco.PullToInterfacor)
 
 
 A Visual Studio Code Extension to include the ability to **Pull** methods and properties to inherited interfaces and base classes. This is targeted to C# development and is meant as a supplemental extension to C# Dev Kit. This extension supports pulling public properties and methods to interfaces, and public and protected methods to base classes.
@@ -63,15 +66,8 @@ A Visual Studio Code Extension to include the ability to **Pull** methods and pr
 
 
 
-<img src="./GifInstruction/warning wave line.gif" />
-
-
-
+<img src="./GifInstruction/PullToExample.gif" />
 
 
 ## Special Thanks
 Some of the helpers were adopted from [devshop](https://github.com/devshop/csharp-model-to-builder)
-
-
-
-
