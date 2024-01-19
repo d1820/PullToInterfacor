@@ -9,28 +9,16 @@ namespace Sample
     public class MyClass<TType> : BaseClass, IMyClass, IMyTypedClass<string> where TType : class
     {
         private string _fullProperty;
-        public int MyProperty { get; set; }
         public int MyPropertyLamda => 5;
         public string FullProperty
         {
             get => _fullProperty;
             set => _fullProperty = value;
         }
-        public string FullPropertyAlt
-        {
-            get
-            {
-                return _fullProperty;
-            }
-            set
-            {
-                _fullProperty = value;
-            }
-        }
         public async Task<int> GetNewIdAsync<TNewType>(string name,
                                                     string address,
                                                     string city,
-                                                    string state) where TNewType : TType
+                                                    string state) where TNewType : class
         {
             Console.WriteLine("starting");
             var coll = new List<string>();
@@ -38,22 +26,18 @@ namespace Sample
             {
                 foreach (var item in coll)
                 {
-
                 }
             }
             Console.WriteLine("ending");
             return 1;
         }
-
         public Address MethodLambdaMultiLine() => new Address
         {
             Name = "",
             City = "",
             Street = ""
         };
-
         public int MyMethodLamda() => 5;
-
         protected async Task<int> GetProtectedAsync<TNewType>(string name,
                                                     string address) where TNewType : class
         {

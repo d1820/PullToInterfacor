@@ -1,10 +1,24 @@
 {
   "name": "pulltointerfacor",
+  "publisher": "DanTurco",
   "displayName": "PullToInterfacor",
-  "description": "",
-  "version": "0.0.1",
+  "description": "A Visual Studio Code Extension to include the ability to **Pull** methods and properties to inherited interfaces and base classes. This is targeted to C# development and is meant as a supplemental extension to C# Dev Kit. This extension supports pulling public properties and methods to interfaces, and public and protected methods to base classes.",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.85.0"
+  },
+  "repository": {
+    "url": "https://github.com/d1820/PullToInterfacor.git",
+    "type": "git"
+  },
+  "homepage": "https://github.com/d1820/PullToInterfacor/blob/main/README.md",
+  "icon": "./PullToInterfacor.png",
+  "galleryBanner": {
+   "color": "#2596be",
+   "theme": "light"
+  },
+  "bugs": {
+    "url": "https://github.com/d1820/PullToInterfacor/issues"
   },
   "categories": [
     "Programming Languages",
@@ -35,7 +49,8 @@
     "test-jest": "jest",
     "test-jest-watch": "jest --watch",
     "test-jest-coverage": "jest --coverage",
-    "test:integration": "npm run compile && node ./node_modules/vscode/bin/test"
+    "test:integration": "npm run compile && node ./node_modules/vscode/bin/test",
+    "update-toc": "powershell -ExecutionPolicy Unrestricted markdown-toc ./README.md -i --bullets=\"-\" ; Write-Host \"Complete\""
   },
   "devDependencies": {
     "@types/jest": "^25.2.3",
