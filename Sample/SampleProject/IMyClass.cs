@@ -8,7 +8,6 @@ namespace Sample
 {
     public interface IMyClass
     {
-        int MyProperty { get; set; }
-        string FullPropertyAlt { get; set; }
+
     }
 }
