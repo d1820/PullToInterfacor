@@ -34,7 +34,7 @@
     "test": "vscode-test",
     "test-jest": "jest",
     "test-jest-watch": "jest --watch",
-    "test:coverage": "jest --coverage",
+    "test-jest-coverage": "jest --coverage",
     "test:integration": "npm run compile && node ./node_modules/vscode/bin/test"
   },
   "devDependencies": {

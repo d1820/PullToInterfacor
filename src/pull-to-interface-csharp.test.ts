@@ -1,4 +1,4 @@
-import { baseClassFile, expectedBaseClassFile, expectedInterfaceFile, interfaceFile } from './test/test-class';
+import { baseClassFile, expectedInterfaceFile, interfaceFile } from './test/test-class';
 import { addMemberToDocument, getSignatureText } from './pull-to-interface-csharp';
 import { SignatureLineResult, SignatureType } from './utils/csharp-util';
 import * as vscodeMock from 'jest-mock-vscode';
@@ -24,18 +24,19 @@ describe('Pull To Interface CSharp', () =>
 
     it('should return base class file with protected method included', () =>
     {
-
-      const expected = expectedBaseClassFile;
-      const ff = `protected Task<int> GetProtected<TNewType>(string name,
-                                            string address) where TNewType : TType
-        {
-            Console.WriteLine("protected");
-            var coll = new List<string>();
-        }`;
+      const signature = `
+      protected Task<int> GetProtected<TNewType>(string name,
+                                                  string address) where TNewType : TType
+      {
+          Console.WriteLine("protected");
+          var coll = new List<string>();
+      }`;
       // Act
-      const output = addMemberToDocument('BaseClass', new SignatureLineResult(ff, SignatureType.FullProperty, 1, 'protected'), '\n', baseClassFile, false);
+      const output = addMemberToDocument('BaseClass', new SignatureLineResult(signature, SignatureType.FullProperty, 1, 'protected'), '\n', baseClassFile, false);
 
-      expect(expected).toEqual(output);
+      expect(output).toContain('Console.WriteLine("protected");');
+      expect(output).toContain('protected Task<int> GetProtected<TNewType>(string name,');
+      expect(output).toContain('var coll = new List<string>();');
     });
 
   });

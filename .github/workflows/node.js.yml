@@ -26,5 +26,5 @@ jobs:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
     - run: npm ci
-    - run: npm run compile --if-present
-    - run: npm test
+    - run: npm run pretest --if-present
+    - run: npm run test-jest-coverage

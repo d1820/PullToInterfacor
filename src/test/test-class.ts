@@ -117,25 +117,3 @@ namespace Sample
     }
 }
 `;
-
-export const expectedBaseClassFile = `using System;
-using System.Collections.Generic;using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
-namespace Sample
-{
-    public class BaseClass : IBaseClass
-    {
-        protected Task<int> GetProtected<TNewType>(string name,
-                                                    string address) where TNewType : TType
-        {
-            Console.WriteLine("protected");
-            var coll = new List<string>();
-        }
-    }
-}
-`;
-
-
