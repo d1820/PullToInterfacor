@@ -31,7 +31,7 @@ namespace Sample
                                                     string city,
                                                     string state) where TNewType : TType
         {
-            Console.WriteLine("tester");
+            Console.WriteLine("starting");
             var coll = new List<string>();
             if (1 == 1)
             {
@@ -40,6 +40,19 @@ namespace Sample
 
                 }
             }
+            Console.WriteLine("ending");
+        }
+        public string MethodLambdaMultiLine() => new Address{
+          Name = "",
+          City = "",
+          Street = ""
+        };
+        public int MyMethodLamda => 5;
+        protected Task<int> GetProtected<TNewType>(string name,
+                                                    string address) where TNewType : TType
+        {
+            Console.WriteLine("protected");
+            var coll = new List<string>();
         }
     }
 }
@@ -71,7 +84,7 @@ namespace Sample
     }
 }
 
-`
+`;
 
 export const expectedInterfaceFile = `using System;
 using System.Collections.Generic;
@@ -88,6 +101,41 @@ namespace Sample
     }
 }
 
-`
+`;
+
+export const baseClassFile = `using System;
+using System.Collections.Generic;using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Sample
+{
+    public class BaseClass : IBaseClass
+    {
+
+    }
+}
+`;
+
+export const expectedBaseClassFile = `using System;
+using System.Collections.Generic;using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+
+namespace Sample
+{
+    public class BaseClass : IBaseClass
+    {
+        protected Task<int> GetProtected<TNewType>(string name,
+                                                    string address) where TNewType : TType
+        {
+            Console.WriteLine("protected");
+            var coll = new List<string>();
+        }
+    }
+}
+`;
 
 

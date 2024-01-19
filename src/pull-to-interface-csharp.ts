@@ -1,62 +1,72 @@
 import { Range, TextEditor, Uri, WorkspaceEdit, workspace } from "vscode";
 import { IWindow } from "./interfaces/window.interface";
-import { getClassName, getInheritedNames, getNamespace, getMethodSignatureText, getPropertySignatureText, SignatureType, SignatureLineResult, getUsingStatementsFromText, replaceUsingStatementsFromText, getBeginningOfLineIndent } from "./utils/csharp-util";
+import { getClassName, getInheritedNames, getNamespace, SignatureType, SignatureLineResult, getUsingStatementsFromText, replaceUsingStatementsFromText, getBeginningOfLineIndent, isMethod, isValidAccessorLine, getFullSignatureOfLine, isTerminating, cleanString, cleanAccessor } from "./utils/csharp-util";
 import { isTextEditorOpen, isTextInEditor, isWorkspaceLoaded } from "./utils/workspace-util";
 
-export const getSubCommandsAsync = async (workspaceRoot: string, window: IWindow): Promise<string[]> => {
-  if (!isWorkspaceLoaded(workspaceRoot, window)) { return []; };
-  if (!isTextEditorOpen(window)) { return []; };
+export const getSubCommandsAsync = async (workspaceRoot: string, window: IWindow): Promise<string[]> =>
+{
+  if (!isWorkspaceLoaded(workspaceRoot, window))
+  {
+    return [];
+  };
+  if (!isTextEditorOpen(window))
+  {
+    return [];
+  };
 
   const editor = window.activeTextEditor;
   const text = editor.document.getText();
-  if (!isTextInEditor(text, window)) { return []; };
-
   const namespace = getNamespace(text, window);
-  if (!namespace) { return []; };
   const className = getClassName(text, window);
-  if (!className) { return []; };
+  if (!isTextInEditor(text, window) || !namespace || !className)
+  {
+    return [];
+  };
 
   let inheritedNames = getInheritedNames(text, true);
 
   inheritedNames = await lookForSubInheritedNamesAsync(inheritedNames);
-  const cleanedNames = inheritedNames.filter(f => f.startsWith('I')); //Filter base classes for now
-  return [...new Set(cleanedNames)];
+  //const cleanedNames = inheritedNames.filter(f => f.startsWith('I')); //Filter base classes for now
+  return [...new Set(inheritedNames)];
 };
 
-const lookForSubInheritedNamesAsync = async (inheritedNames: string[]): Promise<string[]> => {
-  for (const fileName of inheritedNames) {
+const lookForSubInheritedNamesAsync = async (inheritedNames: string[]): Promise<string[]> =>
+{
+  for (const fileName of inheritedNames)
+  {
     const files = await workspace.findFiles(`**/${fileName}.cs`, '**/node_modules/**');
     const document = await workspace.openTextDocument(files[0].path);
     const text = document.getText();
     const subInheritedNames = getInheritedNames(text, true);
-    if (subInheritedNames.length > 0) {
+    if (subInheritedNames.length > 0)
+    {
       inheritedNames = [...inheritedNames, ...subInheritedNames, ...(await lookForSubInheritedNamesAsync(subInheritedNames))];
     }
   };
   return inheritedNames;
-}
+};
 
-export const getSignatureToPull = (editor: TextEditor): SignatureLineResult | null => {
-  const propertySignature = getPropertySignatureText(editor);
+export const getSignatureToPull = (editor: TextEditor, accessor: string): SignatureLineResult | null =>
+{
+  const signature = getSignatureText(editor, accessor);
 
-  const methodSignature = getMethodSignatureText(editor);
-
-  if (propertySignature?.signature) {
-    if (propertySignature.signatureType === SignatureType.FullProperty) {
-      return { signature: `${propertySignature.signature} { get; set; }`, signatureType: propertySignature.signatureType };
+  if (signature?.signature)
+  {
+    if (signature.signatureType === SignatureType.Method)
+    {
+      return new SignatureLineResult(`${signature.signature};`, signature.signatureType, signature.lineMatchStartsOn, signature.accessor);
     }
-    return { signature: `${propertySignature.signature} { get; }`, signatureType: propertySignature.signatureType };
-  }
-
-  if (methodSignature?.signature) {
-    if (methodSignature.signatureType === SignatureType.Method) {
-      return { signature: `${methodSignature.signature};`, signatureType: methodSignature.signatureType };
+    if (signature.signatureType === SignatureType.FullProperty)
+    {
+      return new SignatureLineResult(`${signature.signature} { get; set; }`, signature.signatureType, signature.lineMatchStartsOn, signature.accessor);
     }
+    return new SignatureLineResult(`${signature.signature} { get; }`, signature.signatureType, signature.lineMatchStartsOn, signature.accessor);
   }
   return null;
 };
 
-export const applyEditsAsync = async (filePath: string, newFileContent: string): Promise<boolean> => {
+export const applyEditsAsync = async (filePath: string, newFileContent: string): Promise<boolean> =>
+{
   const edit = new WorkspaceEdit();
   const uri = Uri.file(filePath);
 
@@ -67,49 +77,124 @@ export const applyEditsAsync = async (filePath: string, newFileContent: string):
   return await workspace.applyEdit(edit);
 };
 
-export const getEditorDefaultIndent = (): number => {
+export const getEditorDefaultIndent = (): number =>
+{
   const editorConfig = workspace.getConfiguration('editor');
   return editorConfig.get<number>('tabSize', 4); // Default to 4 spaces
 };
 
-export const addMemberToInterface = (subcommand: string,
+export const addMemberToDocument = (subcommand: string,
   signatureResult: SignatureLineResult,
   eol: string,
-  interfaceFileContent: string): string => {
+  documentFileContent: string,
+  isInterface: boolean): string =>
+{
 
-  if (!signatureResult.signature) {
-    return interfaceFileContent;
+  if (!signatureResult.signature)
+  {
+    return documentFileContent;
   }
-  const interfaceRegEx = new RegExp(`(.*public\\s*interface\\s*${subcommand}[\\s]*{)`);
-  const interfaceMatchedMember = interfaceFileContent!.match(interfaceRegEx);
+  let regEx;
+  if (isInterface)
+  {
+    regEx = new RegExp(`(.*public\\s*interface\\s*${subcommand}.*[\\s]*{)`);
+  }
+  else
+  {
+    regEx = new RegExp(`(.*class\\s*${subcommand}.*[\\s]*{)`);
+  }
 
-  if (interfaceMatchedMember) {
-    const originalText = interfaceMatchedMember[1]; //group from regex
+  const documentMatchedMember = documentFileContent!.match(regEx);
+
+  if (documentMatchedMember)
+  {
+    const originalText = documentMatchedMember[1]; //group from regex
     //get the indent count
     const beginningIndent = getBeginningOfLineIndent(originalText);
     let totalLength = signatureResult.signature.length;
     const indent = getEditorDefaultIndent();
-    totalLength = totalLength + beginningIndent + indent;
-    const newText = `${originalText}${eol}${signatureResult.signature.padStart(totalLength, ' ')}${eol}`;
-    interfaceFileContent = interfaceFileContent!.replace(interfaceRegEx, newText);
-    return interfaceFileContent;
-  } else {
-    return interfaceFileContent;
+    let newText;
+    if (isInterface)
+    {
+      totalLength = totalLength + beginningIndent + indent;
+      newText = `${originalText}${eol}${signatureResult.signature.padStart(totalLength, ' ')}${eol}`;
+    }
+    else
+    {
+      newText = `${originalText}${eol}${signatureResult.signature}${eol}`;
+    }
+
+    documentFileContent = documentFileContent!.replace(regEx, newText);
+    return documentFileContent;
   }
-}
+  else
+  {
+    return documentFileContent;
+  }
+};
 
-export const addUsingsToInterface = (
+export const addUsingsToDocument = (
   eol: string,
-  interfaceFileContent: string,
-  usings: string[]): string => {
+  documentFileContent: string,
+  usings: string[]): string =>
+{
 
-  if (!interfaceFileContent) {
-    return interfaceFileContent;
+  if (!documentFileContent)
+  {
+    return documentFileContent;
   }
   //add the usings to file content
-  const existingInterfaceUsings = getUsingStatementsFromText(interfaceFileContent);
-  let combinedUsings = [...usings, ...existingInterfaceUsings];
+  const existingDocumentUsings = getUsingStatementsFromText(documentFileContent);
+  let combinedUsings = [...usings, ...existingDocumentUsings];
   combinedUsings = [...new Set(combinedUsings)]; //distinct
-  interfaceFileContent = replaceUsingStatementsFromText(interfaceFileContent, combinedUsings, eol);
-  return interfaceFileContent;
-}
+  documentFileContent = replaceUsingStatementsFromText(documentFileContent, combinedUsings, eol);
+  return documentFileContent;
+};
+
+export const getSignatureText = (editor: TextEditor, accessor: string): SignatureLineResult | null =>
+{
+  let signatureResult: SignatureLineResult | null = null;
+  if (editor)
+  {
+    // Get the position of the cursor
+    const cursorPosition = editor.selection.active;
+    let line = cursorPosition.line;
+    let currentLine = editor.document.lineAt(line).text;
+    let publicMatch = isValidAccessorLine(currentLine, accessor);
+    if (publicMatch)
+    {
+      signatureResult = getFullSignatureOfLine(accessor, editor, line);
+    }
+    else
+    {
+      while (!publicMatch && !isTerminating(currentLine))
+      {
+        if (line < 1)
+        {
+          break;
+        }
+        //we start reading up lines to get the starting line
+        line = line - 1;
+        currentLine = editor.document.lineAt(line).text;
+        publicMatch = isValidAccessorLine(currentLine, accessor);
+        if (publicMatch)
+        {
+          signatureResult = getFullSignatureOfLine(accessor, editor, line);
+          break;
+        }
+      }
+    }
+    if (signatureResult?.signature)
+    {
+      signatureResult.signature = cleanString(signatureResult.signature);
+      signatureResult.signature = cleanAccessor(accessor, signatureResult.signature!);
+    }
+  }
+  return signatureResult;
+  // if (checkForMethod)
+  // {
+  //   return isMethod(signatureResult?.signature) ? signatureResult : null;
+  // }
+  // return isMethod(signatureResult?.signature) ? null : signatureResult;
+};
+

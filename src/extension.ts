@@ -5,91 +5,146 @@ import * as vscode from 'vscode';
 import { getWorkspaceFolder } from './utils/workspace-util';
 import * as csharp from './pull-to-interface-csharp';
 import { IWindow } from './interfaces/window.interface';
-import { SignatureType, cleanExcessiveNewLines, getLineEnding, getMemberName, getUsingStatements } from './utils/csharp-util';
+import { SignatureLineResult, SignatureType, cleanExcessiveNewLines, getLineEnding, getMemberBodyByBrackets, getMemberBodyBySemiColon, getMemberName, getUsingStatements, isTerminating } from './utils/csharp-util';
 
 
 const extensionName = 'pulltointerfacor.pullto';
+let allCommands: any = null;
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export  function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext)
+{
   var wsf = vscode.workspace.workspaceFolders;
   const workspaceRoot: string = getWorkspaceFolder(wsf as WorkspaceFolder[]);
-  let disposable = vscode.commands.registerTextEditorCommand(extensionName, async (editor) => {
-    if (editor && editor.document.languageId === 'csharp') {
+
+  let disposable = vscode.commands.registerTextEditorCommand(extensionName, async (editor) =>
+  {
+    if (editor && editor.document.languageId === 'csharp')
+    {
       const subCommands = await csharp.getSubCommandsAsync(workspaceRoot, vscode.window as IWindow);
       buildSubCommands(subCommands, context);
+    }
+    else
+    {
+      vscode.window.showErrorMessage(`Unsupported pull. Language ${editor.document.languageId} not supported.`);
     }
   });
 
   context.subscriptions.push(disposable);
 }
 
-const isSubcommandRegisteredAsync = async (subcommand: string): Promise<boolean> => {
-  const allCommands = await vscode.commands.getCommands(true);
+const isSubcommandRegisteredAsync = async (subcommand: string): Promise<boolean> =>
+{
+  if (!allCommands)
+  {
+    allCommands = await vscode.commands.getCommands(true);
+    console.log('🚀 ~ allCommands:', allCommands);
+  }
   return allCommands.includes(subcommand);
 };
 
-const buildSubCommands = async (subcommands: string[], context: vscode.ExtensionContext) => {
-
+const buildSubCommands = async (subcommands: string[], context: vscode.ExtensionContext) =>
+{
   // Register each subcommand
-  subcommands.forEach(async subcommand => {
+  subcommands.forEach(async subcommand =>
+  {
     const subCommandName = `${extensionName}.${subcommand}`;
     const isRegistered = await isSubcommandRegisteredAsync(subCommandName);
-    if (!isRegistered) {
-      const disposable = vscode.commands.registerTextEditorCommand(subCommandName, async (editor) => {
+    if (!isRegistered)
+    {
+      const disposable = vscode.commands.registerTextEditorCommand(subCommandName, async (editor) =>
+      {
         //check if eligible for pull
-        var signatureResult = csharp.getSignatureToPull(editor);
+        var signatureResult = csharp.getSignatureToPull(editor, '(public|protected)');
 
-        //TODO get this to work
-        if (!subcommand.startsWith("I") && signatureResult?.signatureType === SignatureType.Method) {
-          vscode.window.showErrorMessage(`Unsupported pull. Pulling methods to a base class (${subcommand}) is not supported. Please copy method manually`);
-          return;
-        }
-
-        if (!signatureResult?.signature || signatureResult.signatureType === SignatureType.Unknown) {
-          vscode.window.showErrorMessage(`Unsupported pull. Unable to determine what to pull. 'public' methods and properties are only supported. Please copy manually`);
+        if (!signatureResult?.signature || signatureResult.signatureType === SignatureType.Unknown)
+        {
+          vscode.window.showErrorMessage(`Unsupported pull. Unable to determine what to pull. 'public' properties and 'public' or 'protected' methods are only supported. Please copy manually`);
           return;
         }
 
         //read file contents
         const files = await vscode.workspace.findFiles(`**/${subcommand}.cs`, '**/node_modules/**');
-        if (files.length > 1) {
+        if (files.length > 1)
+        {
           vscode.window.showErrorMessage(`More then one file found matching ${subcommand}. Please copy manually`);
           return;
         }
 
-        const interfaceDocument = await vscode.workspace.openTextDocument(files[0].path);
-        let interfaceDocumentContent = interfaceDocument.getText();
-        if (!interfaceDocumentContent) {
+        const selectedFileDocument = await vscode.workspace.openTextDocument(files[0].path);
+        let selectedFileDocumentContent = selectedFileDocument.getText();
+        if (!selectedFileDocumentContent)
+        {
           vscode.window.showErrorMessage(`Unable to parse file ${subcommand}. Please copy manually`);
           return;
         }
-        const eol = getLineEnding(editor);
-        if (interfaceDocumentContent.indexOf(signatureResult.signature.trim()) > -1) {
+
+        if (selectedFileDocumentContent.indexOf(signatureResult.signature.trim()) > -1)
+        {
           vscode.window.showWarningMessage(`Member already in ${subcommand}. Skipping pull`);
           return;
-        } else {
-          interfaceDocumentContent = csharp.addMemberToInterface(subcommand, signatureResult, eol, interfaceDocumentContent);
-          if (interfaceDocumentContent) {
+        }
+        else
+        {
+          const eol = getLineEnding(editor);
+
+          if (!subcommand.startsWith("I"))
+          {
+            if (signatureResult?.signatureType === SignatureType.Method)
+            {
+              let currentLine = editor.document.lineAt(signatureResult.lineMatchStartsOn).text;
+              if (currentLine.indexOf("=>") > -1)
+              {
+                const body = getMemberBodyBySemiColon(editor, signatureResult);
+                const methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
+                selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
+
+              }
+              else
+              {
+                const body = getMemberBodyByBrackets(editor, signatureResult);
+                const methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
+                selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
+              }
+            }
+          }
+          else
+          {
+            if (signatureResult.accessor === 'protected')
+            {
+              vscode.window.showErrorMessage(`Unsupported pull. Protected members can not be pulled to an inteface. Please copy method manually`);
+              return;
+            }
+            selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, signatureResult, eol, selectedFileDocumentContent, true);
+          }
+
+          if (selectedFileDocumentContent)
+          {
             const currentDocumentUsings = getUsingStatements(editor);
-            interfaceDocumentContent = csharp.addUsingsToInterface(eol, interfaceDocumentContent, currentDocumentUsings)
-            interfaceDocumentContent = cleanExcessiveNewLines(interfaceDocumentContent);
-            const success = await csharp.applyEditsAsync(files[0].path, interfaceDocumentContent);
-            if (!success) {
+            selectedFileDocumentContent = csharp.addUsingsToDocument(eol, selectedFileDocumentContent, currentDocumentUsings);
+            selectedFileDocumentContent = cleanExcessiveNewLines(selectedFileDocumentContent);
+            selectedFileDocumentContent = selectedFileDocumentContent.replace('namespace', `${eol}namespace`);
+            const success = await csharp.applyEditsAsync(files[0].path, selectedFileDocumentContent);
+            if (!success)
+            {
               vscode.window.showErrorMessage(`Unable to update ${subcommand}. Please copy manually`);
               return;
             }
 
-            const wasSaved = await interfaceDocument.save();
-            if (!wasSaved) {
+            const wasSaved = await selectedFileDocument.save();
+            if (!wasSaved)
+            {
               vscode.window.showWarningMessage(`Unable to save updates to ${subcommand}. Please save file manually`);
               return;
             }
             const memberName = getMemberName(signatureResult!.signature);
             vscode.window.showInformationMessage(`${memberName} pulled to ${subcommand}`);
-          } else {
+          }
+          else
+          {
             vscode.window.showErrorMessage(`Unable to parse file ${subcommand}. Please copy manually`);
           }
+
         }
       });
 
@@ -101,10 +156,12 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
   const chosenSubcommand = await vscode.window.showQuickPick(subcommands);
 
   // Execute the chosen subcommand
-  if (chosenSubcommand) {
+  if (chosenSubcommand)
+  {
     vscode.commands.executeCommand(`${extensionName}.${chosenSubcommand}`);
   }
 };
 
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate()
+{ }
