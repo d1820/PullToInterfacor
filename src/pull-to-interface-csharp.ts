@@ -1,8 +1,16 @@
 import { Range, TextEditor, Uri, WorkspaceEdit, workspace } from "vscode";
 import { IWindow } from "./interfaces/window.interface";
-import { getClassName, getInheritedNames, getNamespace, SignatureType, SignatureLineResult, getUsingStatementsFromText, replaceUsingStatementsFromText, getBeginningOfLineIndent, isMethod, isValidAccessorLine, getFullSignatureOfLine, isTerminating, cleanString, cleanAccessor } from "./utils/csharp-util";
+import { getClassName, getInheritedNames, getNamespace, SignatureType, SignatureLineResult, getUsingStatementsFromText, replaceUsingStatementsFromText, getBeginningOfLineIndent, isValidAccessorLine, getFullSignatureOfLine, isTerminating, cleanString, cleanAccessor } from "./utils/csharp-util";
 import { isTextEditorOpen, isTextInEditor, isWorkspaceLoaded } from "./utils/workspace-util";
 
+
+export class InheritedMemberTracker
+{
+  names: string[] = [];
+  constructor()
+  {
+  }
+}
 export const getSubCommandsAsync = async (workspaceRoot: string, window: IWindow): Promise<string[]> =>
 {
   if (!isWorkspaceLoaded(workspaceRoot, window))
@@ -25,24 +33,39 @@ export const getSubCommandsAsync = async (workspaceRoot: string, window: IWindow
 
   let inheritedNames = getInheritedNames(text, true);
 
-  inheritedNames = await lookForSubInheritedNamesAsync(inheritedNames);
-  //const cleanedNames = inheritedNames.filter(f => f.startsWith('I')); //Filter base classes for now
-  return [...new Set(inheritedNames)];
+  const tracker = new InheritedMemberTracker();
+
+  const promises = inheritedNames.map(fileName =>
+    openFileAndReadInheritedNamesAsync(fileName, tracker)
+  );
+  const pr = await Promise.all(promises);
+  pr.forEach(result =>
+  {
+    tracker.names.push(...result);
+  });
+
+  tracker.names.push(...inheritedNames);
+  tracker.names =tracker.names.sort();
+  return [...new Set(tracker.names)];
 };
 
-const lookForSubInheritedNamesAsync = async (inheritedNames: string[]): Promise<string[]> =>
+const openFileAndReadInheritedNamesAsync = async (fileName: string, tracker: InheritedMemberTracker): Promise<string[]> =>
 {
-  for (const fileName of inheritedNames)
+  const files = await workspace.findFiles(`**/${fileName}.cs`, '**/node_modules/**');
+  const document = await workspace.openTextDocument(files[0].path);
+  const text = document.getText();
+  const inheritedNames = getInheritedNames(text, true);
+  if (inheritedNames.length > 0)
   {
-    const files = await workspace.findFiles(`**/${fileName}.cs`, '**/node_modules/**');
-    const document = await workspace.openTextDocument(files[0].path);
-    const text = document.getText();
-    const subInheritedNames = getInheritedNames(text, true);
-    if (subInheritedNames.length > 0)
+    const promises = inheritedNames.map(fileName =>
+      openFileAndReadInheritedNamesAsync(fileName, tracker)
+    );
+    const pr = await Promise.all(promises);
+    pr.forEach(result =>
     {
-      inheritedNames = [...inheritedNames, ...subInheritedNames, ...(await lookForSubInheritedNamesAsync(subInheritedNames))];
-    }
-  };
+      tracker.names.push(...result);
+    });
+  }
   return inheritedNames;
 };
 
@@ -54,13 +77,13 @@ export const getSignatureToPull = (editor: TextEditor, accessor: string): Signat
   {
     if (signature.signatureType === SignatureType.Method)
     {
-      return new SignatureLineResult(`${signature.signature};`, signature.signatureType, signature.lineMatchStartsOn, signature.accessor);
+      return SignatureLineResult.createFromSignatureLineResult(`${signature.signature};`, signature);
     }
     if (signature.signatureType === SignatureType.FullProperty)
     {
-      return new SignatureLineResult(`${signature.signature} { get; set; }`, signature.signatureType, signature.lineMatchStartsOn, signature.accessor);
+      return SignatureLineResult.createFromSignatureLineResult(`${signature.signature} { get; set; }`, signature);
     }
-    return new SignatureLineResult(`${signature.signature} { get; }`, signature.signatureType, signature.lineMatchStartsOn, signature.accessor);
+    return SignatureLineResult.createFromSignatureLineResult(`${signature.signature} { get; }`, signature);
   }
   return null;
 };
@@ -160,14 +183,15 @@ export const getSignatureText = (editor: TextEditor, accessor: string): Signatur
     const cursorPosition = editor.selection.active;
     let line = cursorPosition.line;
     let currentLine = editor.document.lineAt(line).text;
-    let publicMatch = isValidAccessorLine(currentLine, accessor);
-    if (publicMatch)
+    const originalSelectedLine = currentLine;
+    let accessMatch = isValidAccessorLine(currentLine, accessor);
+    if (accessMatch)
     {
       signatureResult = getFullSignatureOfLine(accessor, editor, line);
     }
     else
     {
-      while (!publicMatch && !isTerminating(currentLine))
+      while (!accessMatch && !isTerminating(currentLine))
       {
         if (line < 1)
         {
@@ -176,8 +200,8 @@ export const getSignatureText = (editor: TextEditor, accessor: string): Signatur
         //we start reading up lines to get the starting line
         line = line - 1;
         currentLine = editor.document.lineAt(line).text;
-        publicMatch = isValidAccessorLine(currentLine, accessor);
-        if (publicMatch)
+        accessMatch = isValidAccessorLine(currentLine, accessor);
+        if (accessMatch)
         {
           signatureResult = getFullSignatureOfLine(accessor, editor, line);
           break;
@@ -188,6 +212,7 @@ export const getSignatureText = (editor: TextEditor, accessor: string): Signatur
     {
       signatureResult.signature = cleanString(signatureResult.signature);
       signatureResult.signature = cleanAccessor(accessor, signatureResult.signature!);
+      signatureResult.originalSelectedLine = originalSelectedLine;
     }
   }
   return signatureResult;

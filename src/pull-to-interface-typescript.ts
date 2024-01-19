@@ -5,7 +5,6 @@ import { isTextEditorOpen, isTextInEditor, isWorkspaceLoaded } from "./utils/wor
 
 export const execute = (workspaceRoot: string, window: IWindow, context: ExtensionContext) =>
 {
-  console.log('🚀 ~ execute ~ workspaceRoot:', workspaceRoot);
   if (!isWorkspaceLoaded(workspaceRoot, window))
   {
     return;
@@ -35,6 +34,4 @@ export const execute = (workspaceRoot: string, window: IWindow, context: Extensi
   };
 
   const inheritedNames = getInheritedNames(text, false);
-  console.log('🚀 ~ execute ~ inheritedNames:', inheritedNames);
-
 };

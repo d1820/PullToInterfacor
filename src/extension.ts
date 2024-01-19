@@ -1,15 +1,15 @@
-import { WorkspaceFolder, TextEditor } from 'vscode';
+import { WorkspaceFolder } from 'vscode';
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { getWorkspaceFolder } from './utils/workspace-util';
 import * as csharp from './pull-to-interface-csharp';
 import { IWindow } from './interfaces/window.interface';
-import { SignatureLineResult, SignatureType, cleanExcessiveNewLines, getLineEnding, getMemberBodyByBrackets, getMemberBodyBySemiColon, getMemberName, getUsingStatements, isTerminating } from './utils/csharp-util';
+import { SignatureLineResult, SignatureType, cleanExcessiveNewLines, getLineEnding, getMemberBodyByBrackets, getMemberBodyBySemiColon, getMemberName, getUsingStatements } from './utils/csharp-util';
 
 
 const extensionName = 'pulltointerfacor.pullto';
-let allCommands: any = null;
+//let allCommands: any = null;
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export async function activate(context: vscode.ExtensionContext)
@@ -35,11 +35,7 @@ export async function activate(context: vscode.ExtensionContext)
 
 const isSubcommandRegisteredAsync = async (subcommand: string): Promise<boolean> =>
 {
-  if (!allCommands)
-  {
-    allCommands = await vscode.commands.getCommands(true);
-    console.log('🚀 ~ allCommands:', allCommands);
-  }
+  const allCommands = await vscode.commands.getCommands(true);
   return allCommands.includes(subcommand);
 };
 
@@ -79,7 +75,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           return;
         }
 
-        if (selectedFileDocumentContent.indexOf(signatureResult.signature.trim()) > -1)
+        if (selectedFileDocumentContent.indexOf(signatureResult.originalSelectedLine.trim()) > -1)
         {
           vscode.window.showWarningMessage(`Member already in ${subcommand}. Skipping pull`);
           return;
@@ -151,6 +147,19 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
       context.subscriptions.push(disposable);
     }
   });
+
+  // const cacheSubCommand = 'Missing File? Clear Cache';
+  // const cacheCommand = `${extensionName}.${cacheSubCommand}`;
+  // const isCacheCommandRegistered = await isSubcommandRegisteredAsync(cacheCommand);
+  // if (!isCacheCommandRegistered)
+  // {
+  //   const cacheDisposable = vscode.commands.registerTextEditorCommand(cacheCommand, async (editor) =>
+  //   {
+  //     allCommands = null;
+  //   });
+  //   context.subscriptions.push(cacheDisposable);
+  //   subcommands.push(cacheSubCommand);
+  // }
 
   // Show a quick pick to execute subcommands
   const chosenSubcommand = await vscode.window.showQuickPick(subcommands);

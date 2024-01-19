@@ -1,22 +1,6 @@
 import { EndOfLine, TextEditor } from 'vscode';
 import { IWindow } from '../interfaces/window.interface';
 
-export class SignatureLineResult
-{
-  signature: string | null;
-  signatureType: SignatureType;
-  lineMatchStartsOn: number;
-  accessor: PublicProtected;
-
-  constructor(signature: string | null, signatureType: SignatureType, lineMatchStartsOn: number, accessor: PublicProtected)
-  {
-    this.signature = signature;
-    this.signatureType = signatureType;
-    this.lineMatchStartsOn = lineMatchStartsOn;
-    this.accessor = accessor;
-  }
-}
-
 export type PublicProtected = 'public' | 'protected';
 
 export enum SignatureType
@@ -25,6 +9,30 @@ export enum SignatureType
   LambaProperty,
   Method,
   Unknown
+}
+
+export class SignatureLineResult
+{
+  signature: string | null;
+  signatureType: SignatureType;
+  lineMatchStartsOn: number;
+  accessor: PublicProtected;
+  originalSelectedLine: string;
+
+  constructor(signature: string | null, signatureType: SignatureType, lineMatchStartsOn: number, accessor: PublicProtected)
+  {
+    this.signature = signature;
+    this.signatureType = signatureType;
+    this.lineMatchStartsOn = lineMatchStartsOn;
+    this.accessor = accessor;
+  }
+
+  public static createFromSignatureLineResult(signature: string, signatureResult: SignatureLineResult)
+  {
+    var sig = new SignatureLineResult(signature, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
+    sig.originalSelectedLine = signatureResult.originalSelectedLine;
+    return sig;
+  }
 }
 
 export const getNamespace = (text: string, window: IWindow): string | null =>

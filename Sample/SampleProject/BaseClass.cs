@@ -8,12 +8,6 @@ namespace Sample
 {
     public class BaseClass : IBaseClass
     {
-        public int MyMethodLamda() => 5;
-        public Address MethodLambdaMultiLine() => new Address
-        {
-            Name = "",
-            City = "",
-            Street = ""
-        };
+
     }
 }
