@@ -1,11 +1,10 @@
-import { WorkspaceFolder } from 'vscode';
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { getWorkspaceFolder } from './utils/workspace-util';
 import * as csharp from './pull-to-interface-csharp';
 import { IWindow } from './interfaces/window.interface';
-import { SignatureLineResult, SignatureType, checkIfAlreadyPulledToInterface, cleanExcessiveNewLines, getLineEnding, getMemberBodyByBrackets, getMemberBodyBySemiColon, getMemberName, getUsingStatements } from './utils/csharp-util';
+import { SignatureLineResult, SignatureType, addLineBetweenMembers, checkIfAlreadyPulledToInterface, formatTextWithProperNewLines, getLineEnding, getMemberBodyByBrackets, getMemberBodyBySemiColon, getMemberName, getUsingStatements } from './utils/csharp-util';
 
 
 const extensionName = 'pulltointerfacor.pullto';
@@ -15,9 +14,9 @@ const extensionName = 'pulltointerfacor.pullto';
 export async function activate(context: vscode.ExtensionContext)
 {
   var wsf = vscode.workspace.workspaceFolders;
-  const workspaceRoot: string = getWorkspaceFolder(wsf as WorkspaceFolder[]);
+  const workspaceRoot: string = getWorkspaceFolder(wsf as vscode.WorkspaceFolder[]);
 
-  let disposable = vscode.commands.registerTextEditorCommand(extensionName, async (editor) =>
+  let disposable = vscode.commands.registerTextEditorCommand(extensionName, async (editor: vscode.TextEditor) =>
   {
     if (editor && editor.document.languageId === 'csharp')
     {
@@ -54,7 +53,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
     const isRegistered = await isSubcommandRegisteredAsync(subCommandName);
     if (!isRegistered)
     {
-      const disposable = vscode.commands.registerTextEditorCommand(subCommandName, async (editor) =>
+      const disposable = vscode.commands.registerTextEditorCommand(subCommandName, async (editor: vscode.TextEditor) =>
       {
         const signatureResult = csharp.getSignatureToPull(editor, '(public|protected)');
         let methodBodySignature: SignatureLineResult | null = null;
@@ -65,12 +64,17 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           vscode.window.showErrorMessage(`Unsupported pull. Unable to determine what to pull. 'public' properties and 'public' or 'protected' methods are only supported. Please copy manually`);
           return;
         }
-
+        const tokenSource = new vscode.CancellationTokenSource();
         //read file contents
         const files = await vscode.workspace.findFiles(`**/${subcommand}.cs`, '**/node_modules/**');
         if (files.length > 1)
         {
           vscode.window.showErrorMessage(`More then one file found matching ${subcommand}. Please copy manually`);
+          return;
+        }
+        if (files.length === 0)
+        {
+          vscode.window.showErrorMessage(`No files found matching ${subcommand}. Please copy manually`);
           return;
         }
         const eol = getLineEnding(editor);
@@ -118,10 +122,10 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
 
           if (selectedFileDocumentContent)
           {
-            const currentDocumentUsings = getUsingStatements(editor);
+            const currentDocumentUsings = getUsingStatements(editor, eol);
             selectedFileDocumentContent = csharp.addUsingsToDocument(eol, selectedFileDocumentContent, currentDocumentUsings);
-            selectedFileDocumentContent = cleanExcessiveNewLines(selectedFileDocumentContent, eol);
-
+            selectedFileDocumentContent = formatTextWithProperNewLines(selectedFileDocumentContent, eol);
+            selectedFileDocumentContent = addLineBetweenMembers(selectedFileDocumentContent,eol);
             const success = await csharp.applyEditsAsync(files[0].path, selectedFileDocumentContent);
             if (!success)
             {
@@ -138,12 +142,9 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
             if (!subcommand.startsWith("I") && methodBodySignature?.signature)
             {
               //remove if from current file
-              const activeFileUrl = editor.document.uri;
+              const activeFileUrl = editor.document.uri.path;
               const currentFileDocument = await vscode.workspace.openTextDocument(activeFileUrl);
-              let currentFileDocumentContent = currentFileDocument.getText();
-              currentFileDocumentContent = currentFileDocumentContent.replace(methodBodySignature.signature + eol, '');
-              currentFileDocumentContent = cleanExcessiveNewLines(currentFileDocumentContent, eol);
-              const success = await csharp.applyEditsAsync(activeFileUrl.path, currentFileDocumentContent);
+              const success = await removeFromCurrentEditorAsync(currentFileDocument, methodBodySignature, eol, activeFileUrl);
               if (!success)
               {
                 vscode.window.showErrorMessage(`Unable to remove ${methodBodySignature.signatureType}. Please remove manually`);
@@ -178,6 +179,16 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
     vscode.commands.executeCommand(`${extensionName}.${chosenSubcommand}`);
   }
 };
+
+async function removeFromCurrentEditorAsync(currentFileDocument: vscode.TextDocument, methodBodySignature: SignatureLineResult, eol: string, activeFileUrl: string)
+{
+  let currentFileDocumentContent = currentFileDocument.getText();
+  currentFileDocumentContent = currentFileDocumentContent.replace(methodBodySignature.signature + eol, '');
+  currentFileDocumentContent = formatTextWithProperNewLines(currentFileDocumentContent, eol);
+  currentFileDocumentContent = addLineBetweenMembers(currentFileDocumentContent,eol);
+  const success = await csharp.applyEditsAsync(activeFileUrl, currentFileDocumentContent);
+  return success;
+}
 
 // This method is called when your extension is deactivated
 export function deactivate()
