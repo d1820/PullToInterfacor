@@ -15,6 +15,18 @@ namespace Sample
             get => _fullProperty;
             set => _fullProperty = value;
         }
+        public string FullPropertyAlt
+        {
+            get
+            {
+                return _fullProperty;
+            }
+            set
+            {
+                _fullProperty = value;
+            }
+        }
+        public int MyProperty { get; set; }
         public async Task<int> GetNewIdAsync<TNewType>(string name,
                                                     string address,
                                                     string city,
