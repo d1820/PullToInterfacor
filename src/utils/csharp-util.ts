@@ -1,4 +1,4 @@
-import { EndOfLine, TextEditor } from 'vscode';
+import { EndOfLine, TextDocument, TextEditor } from 'vscode';
 import { IWindow } from '../interfaces/window.interface';
 
 export type PublicProtected = 'public' | 'protected';
@@ -308,7 +308,11 @@ export const isTerminating = (currentLine: string, includeClosingBracket: boolea
 
 export const getLineEnding = (editor: TextEditor): string =>
 {
-  const document = editor.document;
+  return getLineEndingFromDoc(editor.document);
+};
+
+export const getLineEndingFromDoc = (document: TextDocument): string =>
+{
   if (EndOfLine.CRLF === document.eol)
   {
     return '\r\n';
@@ -316,27 +320,34 @@ export const getLineEnding = (editor: TextEditor): string =>
   return '\n';
 };
 
-export const getUsingStatements = (editor: TextEditor): string[] =>
+export const convertEndOfLine = (eol: EndOfLine): string =>
+{
+  if (EndOfLine.CRLF === eol)
+  {
+    return '\r\n';
+  }
+  return '\n';
+};
+
+export const getUsingStatements = (editor: TextEditor, eol: string): string[] =>
 {
   const document = editor.document;
   const docText = document.getText();
-  return getUsingStatementsFromText(docText);
+  return getUsingStatementsFromText(docText, eol);
 };
 
-export const getUsingStatementsFromText = (docText: string): string[] =>
+export const getUsingStatementsFromText = (docText: string, eol: string): string[] =>
 {
-  const usingRegex = new RegExp('using.*;[\r\n*]', 'gm');
-  const matches = docText.match(usingRegex);
-  return matches?.map(m => m) || [];
+  let lines = docText.split(eol);
+  return lines.filter(f => f.startsWith('using'));
 };
 
 export const replaceUsingStatementsFromText = (docText: string, newUsings: string[], eol: string): string =>
 {
-  const usingRegex = new RegExp('^using.*;[\r\n*]', 'gm');
-  const u = newUsings.join('');
-  let cleared = docText.replace(usingRegex, '');
-  cleared = u + eol + cleared;
-  return cleared;
+  let lines = docText.split(eol);
+  lines = lines.filter(f => !f.startsWith('using'));
+  lines = [...newUsings, ...lines];
+  return lines.join(eol);
 };
 
 export const getBeginningOfLineIndent = (text: string): number =>
@@ -350,9 +361,72 @@ export const getBeginningOfLineIndent = (text: string): number =>
   return 0;
 };
 
-export const cleanExcessiveNewLines = (text: string): string =>
+export const addLineBetweenMembers = (text: string, eol: string): string =>
 {
-  const newlineRegex = /^\s*$/gm;
-  return text.replace(newlineRegex, '');
+  //const bracketAccessorRegex = new RegExp('(}|;)(\\s)(public|protected|private|internal)', 'gm');
+  //return text.replace(bracketAccessorRegex, `$1${eol}$2$3`);
+
+  let lines = text.split(eol);
+  let resultLines: string[] = [];
+  for (let index = 0; index < lines.length; index++)
+  {
+    const line = lines[index];
+    resultLines.push(line);
+    if ((line.trim() === "}" || line.trim().endsWith("}") || line.trim().endsWith(";")) && index + 1 <= lines.length && lines[index + 1].trim().match(/(public|protected|private|internal)/))
+    {
+      resultLines.push('');
+    }
+  }
+  return resultLines.join(eol);
 };
 
+export const formatTextWithProperNewLines = (text: string, eol: string): string =>
+{
+  let lines = text.split(eol);
+  let resultLines: string[] = [];
+  let foundEmptyLine = false;
+
+  const crlf = convertEndOfLine(EndOfLine.CRLF);
+  const lf = convertEndOfLine(EndOfLine.LF);
+  for (let line of lines)
+  {
+    if (line.endsWith(crlf) || line.endsWith(lf))
+    {
+      line = line.replace(crlf, '').replace(lf, '');
+    }
+    if (line.trim() === "")
+    {
+      // Found an empty line
+      if (!foundEmptyLine)
+      {
+        // Add the first empty line to the result
+        resultLines.push(line);
+        foundEmptyLine = true;
+      }
+    }
+    else
+    {
+      // Found a line with text
+      resultLines.push(line);
+      foundEmptyLine = false;
+    }
+  }
+  return resultLines.join(eol);
+};
+
+
+export const checkIfAlreadyPulledToInterface = (text: string, signatureResult: SignatureLineResult, eol: string): boolean =>
+{
+  const testValue = cleanAllAccessors(signatureResult.originalSelectedLine).trim();
+  // if (signatureResult.signatureType === SignatureType.Method)
+  // {
+  //   return text.indexOf(testValue + eol) > -1;
+  // }
+  return text.indexOf(testValue) > -1;
+};
+
+export const cleanAllAccessors = (text: string): string =>
+{
+  let regex = new RegExp(`((public|private|protected|internal|abstract|virtual|override)[\\s]*)`, 'gm');
+  return text.replace(regex, '');
+};

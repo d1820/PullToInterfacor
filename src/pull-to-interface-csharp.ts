@@ -52,6 +52,10 @@ export const getSubCommandsAsync = async (workspaceRoot: string, window: IWindow
 const openFileAndReadInheritedNamesAsync = async (fileName: string, tracker: InheritedMemberTracker): Promise<string[]> =>
 {
   const files = await workspace.findFiles(`**/${fileName}.cs`, '**/node_modules/**');
+  if (files.length > 1 || files.length === 0)
+  {
+    return [];
+  }
   const document = await workspace.openTextDocument(files[0].path);
   const text = document.getText();
   const inheritedNames = getInheritedNames(text, true);
@@ -167,7 +171,7 @@ export const addUsingsToDocument = (
     return documentFileContent;
   }
   //add the usings to file content
-  const existingDocumentUsings = getUsingStatementsFromText(documentFileContent);
+  const existingDocumentUsings = getUsingStatementsFromText(documentFileContent, eol);
   let combinedUsings = [...usings, ...existingDocumentUsings];
   combinedUsings = [...new Set(combinedUsings)]; //distinct
   documentFileContent = replaceUsingStatementsFromText(documentFileContent, combinedUsings, eol);

@@ -1,9 +1,9 @@
 import { Position, Selection, Uri } from 'vscode';
-import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isValidAccessorLine, isTerminating, SignatureType, getLineEnding, getUsingStatements, replaceUsingStatementsFromText, getUsingStatementsFromText, getMemberName, getMemberBodyByBrackets, getMemberBodyBySemiColon } from './csharp-util';
+import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isValidAccessorLine, isTerminating, SignatureType, getLineEnding, getUsingStatements, replaceUsingStatementsFromText, getUsingStatementsFromText, getMemberName, getMemberBodyByBrackets, getMemberBodyBySemiColon, formatTextWithProperNewLines, getLineEndingFromDoc, addLineBetweenMembers } from './csharp-util';
 
 import * as vscodeMock from 'jest-mock-vscode';
 import { MockTextEditor } from 'jest-mock-vscode/dist/vscode';
-import { testFile } from '../test/test-class';
+import { testAddLinesBetweenMembers, testAddLinesBetweenMembersExpected, testFile, testTextWithProperNewLines, testTextWithProperNewLinesExpected} from '../test/test-class';
 
 
 describe('CSharp Util', () =>
@@ -502,10 +502,10 @@ describe('CSharp Util', () =>
     {
       var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
       const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
-
-      const result = getUsingStatements(editor);
+      const eol = getLineEndingFromDoc(doc);
+      const result = getUsingStatements(editor, eol);
       expect(result).toHaveLength(4);
-      expect(result[0]).toEqual('using System;\n');
+      expect(result[0]).toEqual('using System;');
     });
   });
 
@@ -514,10 +514,35 @@ describe('CSharp Util', () =>
     it('should return array of using statements', () =>
     {
       var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
-      const result = replaceUsingStatementsFromText(doc.getText(), ['using NoMatch;'], '\n');
+      const eol = getLineEndingFromDoc(doc);
+      const result = replaceUsingStatementsFromText(doc.getText(), ['using NoMatch;'], eol);
       expect(result).toContain('using NoMatch;');
-      const items = getUsingStatementsFromText(result);
+      const items = getUsingStatementsFromText(result, eol);
       expect(items).toHaveLength(1);
+    });
+  });
+
+  describe('formatTextWithProperNewLines', () =>
+  {
+    it('should return spaced out body members', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testTextWithProperNewLines, 'csharp');
+      const eol = getLineEndingFromDoc(doc);
+      const result = formatTextWithProperNewLines(doc.getText(), eol);
+      expect(result).toEqual(testTextWithProperNewLinesExpected);
+    });
+  });
+
+  describe('addLineBetweenMembers', () =>
+  {
+    it.only('should return spaced out body members', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testAddLinesBetweenMembers, 'csharp');
+      const eol = getLineEndingFromDoc(doc);
+      const result = addLineBetweenMembers(doc.getText(), eol);
+      const sp = result.replace(/ /g, '');
+      const ep = testAddLinesBetweenMembersExpected.replace(/ /g, '');
+      expect(sp).toEqual(ep);
     });
   });
 

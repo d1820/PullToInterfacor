@@ -8,6 +8,5 @@ namespace Sample
 {
     public class BaseClass : IBaseClass
     {
-
     }
 }

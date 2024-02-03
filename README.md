@@ -1,74 +1,73 @@
-# pulltointerfacor README
+# PullToInterfacor
 
-This is the README for your extension "pulltointerfacor". After writing up a brief description, we recommend including the following sections.
+---
+![GitHub CI](https://github.com/d1820/PullToInterfacor/actions/workflows/node.js.yml/badge.svg)
+![GitHub License](https://img.shields.io/github/license/d1820/PullToInterfacor?logo=github&logoColor=green)
+![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/stars/DanTurco.PullToInterfacor)
+![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/DanTurco.PullToInterfacor)
+![Visual Studio Marketplace Version (including pre-releases)](https://img.shields.io/visual-studio-marketplace/v/DanTurco.PullToInterfacor)
 
-## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+A Visual Studio Code Extension to include the ability to **Pull** methods and properties to inherited interfaces and base classes. This is targeted to C# development and is meant as a supplemental extension to C# Dev Kit. This extension supports pulling public properties and methods to interfaces, and public and protected methods to base classes.
 
-For example if there is an image subfolder under your extension project workspace:
+## Installation
+---
 
-\!\[feature X\]\(images/feature-x.png\)
+<!-- Download and install the VSIX from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=DanTurco.CodeDocumentor) -->
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Table of Contents
 
-## Requirements
+<!-- toc -->
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- [PullToInterfacor](#pulltointerfacor)
+  - [Installation](#installation)
+  - [Table of Contents](#table-of-contents)
+  - [Instruction](#instruction)
+  - [Caveats](#caveats)
+  - [Known Issues](#known-issues)
+  - [Supported Members](#supported-members)
+    - [Interfaces](#interfaces)
+    - [Base Classes](#base-classes)
+  - [Usage Examples](#usage-examples)
+  - [Special Thanks](#special-thanks)
 
-## Extension Settings
+<!-- tocstop -->
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+## Instruction
+---
 
-For example:
+1. Once installed successful to Visual Studio Code. You can access the commands from F1 then search for **Pull To**.
 
-This extension contributes the following settings:
+## Caveats
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+- This extension only works for base classes and interfaces that have their own C# file. Having multiple interfaces defined in 1 file will not work.
+- Interface files must following the convention **I**Name. The I is the only way it knows its an interface with doing a bunch of file parsing and inference. To keep it fast I went with convention.
+- This is a lot of file parsing to determine what to move, that said the easiest was to ensure all the using are present were to copy them all from the main class to the base or interface, and deduplicate the list. With C# Dev Kit installed the cleanup from that is quick to remove unused using.
+- When pulling full backed property in this version we do not move the private backed field, so if using full backed property you will need to move that yourself. I am open to accepting PRs to update that functionality 😁
+
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
 
-## Release Notes
+## Supported Members
 
-Users appreciate release notes as you update your extension.
+### Interfaces
 
-### 1.0.0
+- public properties
+- public methods
 
-Initial release of ...
+### Base Classes
 
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+- public/protected properties
+- public/protected methods
 
 
-https://github.com/devshop/csharp-model-to-builder
+## Usage Examples
+
+
+
+<img src="./GifInstruction/PullToExample.gif" />
+
+
+## Special Thanks
+Some of the helpers were adopted from [devshop](https://github.com/devshop/csharp-model-to-builder)
