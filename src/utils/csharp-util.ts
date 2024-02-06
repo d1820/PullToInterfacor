@@ -18,6 +18,7 @@ export class SignatureLineResult
   lineMatchStartsOn: number;
   accessor: PublicProtected;
   originalSelectedLine: string;
+  preSignatureContent: string[];
 
   constructor(signature: string | null, signatureType: SignatureType, lineMatchStartsOn: number, accessor: PublicProtected)
   {
@@ -31,6 +32,7 @@ export class SignatureLineResult
   {
     var sig = new SignatureLineResult(signature, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
     sig.originalSelectedLine = signatureResult.originalSelectedLine;
+    sig.preSignatureContent = signatureResult.preSignatureContent;
     return sig;
   }
 }
@@ -168,6 +170,10 @@ export const getMemberBodyByBrackets = (editor: TextEditor, signatureResult: Sig
   let currentLine;
   let bracketCount: number = 0;
   let startingLine = signatureResult.lineMatchStartsOn;
+  if (signatureResult.preSignatureContent.length > 0)
+  {
+    startingLine = startingLine - signatureResult.preSignatureContent.length;
+  }
   let loop = true;
   let startTrackingBracketCounts = false;
   let bodyLines = [];
@@ -207,6 +213,10 @@ export const getMemberBodyBySemiColon = (editor: TextEditor, signatureResult: Si
   let currentLine;
   let semiColonCount: number = 0;
   let startingLine = signatureResult.lineMatchStartsOn;
+  if (signatureResult.preSignatureContent.length > 0)
+  {
+    startingLine = startingLine - signatureResult.preSignatureContent.length;
+  }
   let loop = true;
   let bodyLines = [];
   while (loop)
@@ -277,7 +287,32 @@ export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, sta
   {
     acc = 'protected';
   }
-  return new SignatureLineResult(cleaned, sigType, documentStartingLine, acc);
+
+  //grab any attributes or comments above starting line
+  const finalSig = new SignatureLineResult(cleaned, sigType, documentStartingLine, acc);
+  let preSignatureStartingLine = documentStartingLine-1; //start at the line just above the signature
+  let preSignatureText = [];
+  let preSignatureLine: string | null = '';
+  while (true)
+  {
+    preSignatureLine = (editor.document.lineAt(preSignatureStartingLine).text || '').trim();
+
+    if (preSignatureLine.startsWith('///') || preSignatureLine.startsWith('['))
+    {
+      preSignatureText.push(preSignatureLine);
+    }
+    if (preSignatureLine.startsWith('{') //this would be hitting top of class
+      || preSignatureLine.startsWith('}') //this would be hitting next method or full property up
+      || preSignatureLine.indexOf(';') > -1) //this would be hitting lambda property line above
+    {
+      break;
+    }
+    preSignatureStartingLine--; //go up a line at a time
+  }
+  preSignatureText = preSignatureText.reverse();
+  finalSig.preSignatureContent = preSignatureText;
+
+  return finalSig;
 };
 
 export const isValidAccessorLine = (currentLine: string, accessor: string): boolean =>

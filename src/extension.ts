@@ -64,7 +64,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           vscode.window.showErrorMessage(`Unsupported pull. Unable to determine what to pull. 'public' properties and 'public' or 'protected' methods are only supported. Please copy manually`);
           return;
         }
-        const tokenSource = new vscode.CancellationTokenSource();
+
         //read file contents
         const files = await vscode.workspace.findFiles(`**/${subcommand}.cs`, '**/node_modules/**');
         if (files.length > 1)
@@ -93,13 +93,14 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
         }
         else
         {
-          if (!subcommand.startsWith("I"))
+          if (!subcommand.startsWith("I")) //base class
           {
             let currentLine = editor.document.lineAt(signatureResult.lineMatchStartsOn).text;
             if (currentLine.indexOf("=>") > -1)
             {
               const body = getMemberBodyBySemiColon(editor, signatureResult);
               methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
+              methodBodySignature.preSignatureContent = signatureResult.preSignatureContent;
               selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
 
             }
@@ -107,6 +108,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
             {
               const body = getMemberBodyByBrackets(editor, signatureResult);
               methodBodySignature = new SignatureLineResult(body, signatureResult.signatureType, signatureResult.lineMatchStartsOn, signatureResult.accessor);
+              methodBodySignature.preSignatureContent = signatureResult.preSignatureContent;
               selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, methodBodySignature, eol, selectedFileDocumentContent, false);
             }
           }
