@@ -1,9 +1,9 @@
 {
   "name": "pulltointerfacor",
   "publisher": "DanTurco",
-  "displayName": "PullToInterfacor",
+  "displayName": "Pull To Interface C#",
   "description": "A Visual Studio Code Extension to include the ability to **Pull** methods and properties to inherited interfaces and base classes. This is targeted to C# development and is meant as a supplemental extension to C# Dev Kit. This extension supports pulling public properties and methods to interfaces, and public and protected methods to base classes.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "engines": {
     "vscode": "^1.85.0"
   },
