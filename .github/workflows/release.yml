@@ -1,0 +1,29 @@
+name: Release to Marketplace
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4.1.1
+
+      - name: Use Node.js 18.x
+        uses: actions/setup-node@v4.0.2
+        with:
+          node-version: '18.x'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint and compile
+        run: npm run pretest
+
+      - name: Run tests
+        run: npm run test-jest
+
+      - name: Publish to VS Code Marketplace
+        run: npx vsce publish --pat ${{ secrets.VSCE_PAT }}

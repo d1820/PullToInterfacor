@@ -1,5 +1,5 @@
 import { baseClassFile, expectedInterfaceFile, interfaceFile } from './test/test-class';
-import { addMemberToDocument, getSignatureText } from './pull-to-interface-csharp';
+import { addMemberToDocument, addUsingsToDocument, getSignatureToPull, getSignatureText } from './pull-to-interface-csharp';
 import { SignatureLineResult, SignatureType } from './utils/csharp-util';
 import * as vscodeMock from 'jest-mock-vscode';
 import { MockTextEditor } from 'jest-mock-vscode/dist/vscode';
@@ -79,6 +79,99 @@ describe('Pull To Interface CSharp', () =>
       expect(result?.signatureType).not.toEqual(SignatureType.Method);
     });
 
+  });
+
+  describe('addMemberToDocument edge cases', () =>
+  {
+    it('should return document unchanged when signature is null', () =>
+    {
+      const output = addMemberToDocument('IMyClass', new SignatureLineResult(null, SignatureType.FullProperty, 1, 'public'), '\n', interfaceFile, true);
+      expect(output).toEqual(interfaceFile);
+    });
+
+    it('should return document unchanged when subcommand has no match', () =>
+    {
+      const output = addMemberToDocument('IFakeClass', new SignatureLineResult('int Foo { get; set; }', SignatureType.FullProperty, 1, 'public'), '\n', interfaceFile, true);
+      expect(output).toEqual(interfaceFile);
+    });
+  });
+
+  describe('addUsingsToDocument', () =>
+  {
+    it('should merge new usings into existing document', () =>
+    {
+      const result = addUsingsToDocument('\n', interfaceFile, ['using System.Net;']);
+      expect(result).toContain('using System.Net;');
+      expect(result).toContain('using System;');
+    });
+
+    it('should deduplicate usings', () =>
+    {
+      const result = addUsingsToDocument('\n', interfaceFile, ['using System;']);
+      const count = (result.match(/using System;/g) || []).length;
+      expect(count).toBe(1);
+    });
+
+    it('should return empty string when documentFileContent is empty', () =>
+    {
+      const result = addUsingsToDocument('\n', '', ['using System;']);
+      expect(result).toEqual('');
+    });
+  });
+
+  describe('getSignatureToPull', () =>
+  {
+    it('should return null when editor is null', () =>
+    {
+      const result = getSignatureToPull(null as any, 'public');
+      expect(result).toBeNull();
+    });
+
+    it('should return method signature with semicolon', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(37, 0)));
+
+      const result = getSignatureToPull(editor, TEST_ACCESSOR);
+
+      expect(result?.signature).toContain(';');
+      expect(result?.signatureType).toEqual(SignatureType.Method);
+    });
+
+    it('should return full property with get set', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(10, 0)));
+
+      const result = getSignatureToPull(editor, TEST_ACCESSOR);
+
+      expect(result?.signature).toContain('{ get; set; }');
+      expect(result?.signatureType).toEqual(SignatureType.FullProperty);
+    });
+
+    it('should return lambda property with get only', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(11, 0)));
+
+      const result = getSignatureToPull(editor, TEST_ACCESSOR);
+
+      expect(result?.signature).toContain('{ get; }');
+      expect(result?.signatureType).toEqual(SignatureType.LambaProperty);
+    });
+  });
+
+  describe('getSignatureText edge cases', () =>
+  {
+    it('should return null when cursor is at line 0 and no accessor found', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(0, 0), new Position(0, 0)));
+
+      const result = getSignatureText(editor, TEST_ACCESSOR);
+
+      expect(result).toBeNull();
+    });
   });
 
   describe('getPropertySignatureText', () =>
