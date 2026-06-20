@@ -25,10 +25,8 @@ jobs:
       - name: Run tests
         run: npm run test-jest
 
-      - name: Stamp version with run number
-        run: |
-          MAJOR_MINOR=$(node -p "require('./package.json').version" | cut -d. -f1-2)
-          npm version "${MAJOR_MINOR}.${{ github.run_number }}" --no-git-tag-version
+      - name: Stamp version from release tag
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version
 
       - name: Publish to VS Code Marketplace
         run: npx vsce publish --pat ${{ secrets.VSCE_PAT }}
