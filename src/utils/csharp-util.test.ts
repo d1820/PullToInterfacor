@@ -1,9 +1,10 @@
 import { Position, Selection, Uri } from 'vscode';
-import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isValidAccessorLine, isTerminating, SignatureType, getLineEnding, getUsingStatements, replaceUsingStatementsFromText, getUsingStatementsFromText, getMemberName, getMemberBodyByBrackets, getMemberBodyBySemiColon, formatTextWithProperNewLines, getLineEndingFromDoc, addLineBetweenMembers } from './csharp-util';
+import { getClassName, getCurrentLine, getInheritedNames, getNamespace, getFullSignatureOfLine, isMethod, isValidAccessorLine, isTerminating, SignatureType, SignatureLineResult, getLineEnding, getUsingStatements, replaceUsingStatementsFromText, getUsingStatementsFromText, getMemberName, getMemberBodyByBrackets, getMemberBodyBySemiColon, formatTextWithProperNewLines, getLineEndingFromDoc, addLineBetweenMembers, cleanAccessor, convertEndOfLine, checkIfAlreadyPulledToInterface, cleanAllAccessors } from './csharp-util';
 
 import * as vscodeMock from 'jest-mock-vscode';
 import { MockTextEditor } from 'jest-mock-vscode/dist/vscode';
-import { testAddLinesBetweenMembers, testAddLinesBetweenMembersExpected, testFile, testTextWithProperNewLines, testTextWithProperNewLinesExpected} from '../test/test-class';
+import { testAddLinesBetweenMembers, testAddLinesBetweenMembersExpected, testFile, testFileWithAttribute, testTextWithProperNewLines, testTextWithProperNewLinesExpected} from '../test/test-class';
+import { EndOfLine } from 'vscode';
 
 
 describe('CSharp Util', () =>
@@ -535,7 +536,7 @@ describe('CSharp Util', () =>
 
   describe('addLineBetweenMembers', () =>
   {
-    it.only('should return spaced out body members', () =>
+    it('should return spaced out body members', () =>
     {
       var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testAddLinesBetweenMembers, 'csharp');
       const eol = getLineEndingFromDoc(doc);
@@ -597,6 +598,147 @@ describe('CSharp Util', () =>
 
   });
 
+
+  describe('SignatureLineResult.createFromSignatureLineResult', () =>
+  {
+    it('should copy all fields from source', () =>
+    {
+      const source = new SignatureLineResult('public int Foo { get; set; }', SignatureType.FullProperty, 5, 'public');
+      source.originalSelectedLine = 'public int Foo { get; set; }';
+      source.preSignatureContent = ['[Attr]'];
+
+      const result = SignatureLineResult.createFromSignatureLineResult('int Foo { get; set; }', source);
+
+      expect(result.signature).toEqual('int Foo { get; set; }');
+      expect(result.signatureType).toEqual(SignatureType.FullProperty);
+      expect(result.lineMatchStartsOn).toEqual(5);
+      expect(result.accessor).toEqual('public');
+      expect(result.originalSelectedLine).toEqual('public int Foo { get; set; }');
+      expect(result.preSignatureContent).toEqual(['[Attr]']);
+    });
+  });
+
+  describe('cleanAccessor', () =>
+  {
+    it('should return null when str is null', () =>
+    {
+      expect(cleanAccessor('public', null)).toBeNull();
+    });
+
+    it('should strip accessor from string', () =>
+    {
+      expect(cleanAccessor('public', 'public int Foo')).toEqual('int Foo');
+    });
+  });
+
+  describe('convertEndOfLine', () =>
+  {
+    it('should return CRLF for EndOfLine.CRLF', () =>
+    {
+      expect(convertEndOfLine(EndOfLine.CRLF)).toEqual('\r\n');
+    });
+
+    it('should return LF for EndOfLine.LF', () =>
+    {
+      expect(convertEndOfLine(EndOfLine.LF)).toEqual('\n');
+    });
+  });
+
+  describe('checkIfAlreadyPulledToInterface', () =>
+  {
+    it('should return true when cleaned signature exists in text', () =>
+    {
+      const sig = new SignatureLineResult('int Foo', SignatureType.FullProperty, 1, 'public');
+      sig.originalSelectedLine = 'public int Foo { get; set; }';
+      sig.preSignatureContent = [];
+
+      const text = 'int Foo { get; set; }';
+      expect(checkIfAlreadyPulledToInterface(text, sig, '\n')).toBe(true);
+    });
+
+    it('should return false when cleaned signature not in text', () =>
+    {
+      const sig = new SignatureLineResult('int Bar', SignatureType.FullProperty, 1, 'public');
+      sig.originalSelectedLine = 'public int Bar { get; set; }';
+      sig.preSignatureContent = [];
+
+      const text = 'int Foo { get; set; }';
+      expect(checkIfAlreadyPulledToInterface(text, sig, '\n')).toBe(false);
+    });
+  });
+
+  describe('cleanAllAccessors', () =>
+  {
+    it('should remove public accessor', () =>
+    {
+      expect(cleanAllAccessors('public int Foo')).toEqual('int Foo');
+    });
+
+    it('should remove multiple accessors', () =>
+    {
+      expect(cleanAllAccessors('public abstract virtual int Foo')).toEqual('int Foo');
+    });
+
+    it('should remove protected internal', () =>
+    {
+      expect(cleanAllAccessors('protected internal string Bar')).toEqual('string Bar');
+    });
+  });
+
+  describe('getMemberBodyByBrackets with preSignatureContent', () =>
+  {
+    it('should include attribute line when preSignatureContent is populated', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFileWithAttribute, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const sig = getFullSignatureOfLine('public', editor, 8);
+      const body = getMemberBodyByBrackets(editor, sig!);
+
+      expect(body).toContain('[HttpGet]');
+      expect(body).toContain('AnnotatedMethod');
+      expect(body).toContain('return Task.FromResult(1);');
+    });
+
+    it('should exit early when first line is terminating and bracketCount is zero', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const sig = new SignatureLineResult('someSig', SignatureType.FullProperty, 4, 'public');
+      sig.preSignatureContent = [];
+      const body = getMemberBodyByBrackets(editor, sig);
+
+      expect(body).toBeDefined();
+    });
+  });
+
+  describe('getMemberBodyBySemiColon with preSignatureContent', () =>
+  {
+    it('should include attribute line when preSignatureContent is populated', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFileWithAttribute, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const sig = getFullSignatureOfLine('public', editor, 13);
+      const body = getMemberBodyBySemiColon(editor, sig!);
+
+      expect(body).toContain('[HttpPost]');
+      expect(body).toContain('AnnotatedLambdaMethod => 5;');
+    });
+
+    it('should return null when no semicolon found before terminating line', () =>
+    {
+      var doc = vscodeMock.createTextDocument(Uri.parse('C:\temp\test.cs'), testFile, 'csharp');
+      const editor = new MockTextEditor(jest, doc, undefined, new Selection(new Position(1, 0), new Position(1, 0)));
+
+      const sig = new SignatureLineResult('someSig', SignatureType.LambaProperty, 4, 'public');
+      sig.preSignatureContent = [];
+      const body = getMemberBodyBySemiColon(editor, sig);
+
+      expect(body).toBeNull();
+    });
+  });
 
   describe('getMemberBodyByBrackets', () =>
   {

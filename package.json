@@ -3,7 +3,7 @@
   "publisher": "DanTurco",
   "displayName": "Pull To Interface C#",
   "description": "A Visual Studio Code Extension to include the ability to **Pull** methods and properties to inherited interfaces and base classes. This is targeted to C# development and is meant as a supplemental extension to C# Dev Kit. This extension supports pulling public properties and methods to interfaces, and public and protected methods to base classes.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -14,15 +14,28 @@
   "homepage": "https://github.com/d1820/PullToInterfacor/blob/main/README.md",
   "icon": "./PullToInterfacor.png",
   "galleryBanner": {
-   "color": "#2596be",
-   "theme": "light"
+    "color": "#2596be",
+    "theme": "light"
   },
   "bugs": {
     "url": "https://github.com/d1820/PullToInterfacor/issues"
   },
   "categories": [
-    "Programming Languages",
-    "Other"
+    "Programming Languages"
+  ],
+  "keywords": [
+    "c#",
+    "csharp",
+    "dotnet",
+    ".net",
+    "interface",
+    "refactor",
+    "refactoring",
+    "pull to interface",
+    "extract interface",
+    "base class",
+    "inheritance",
+    "code generation"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -54,17 +67,18 @@
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "18.x",
-    "@types/vscode": "^1.85.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "26.x",
+    "@types/vscode": "^1.125.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
-    "@vscode/test-cli": "^0.0.4",
-    "@vscode/test-electron": "^2.3.9",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^3.0.0",
+    "@vscode/vsce": "^3.9.2",
     "eslint": "^8.56.0",
     "jest": "^29.7.0",
     "jest-mock-vscode": "^2.1.1",
-    "ts-jest": "^29.1.2",
+    "ts-jest": "^29.4.11",
     "typescript": "^5.3.3"
   }
 }

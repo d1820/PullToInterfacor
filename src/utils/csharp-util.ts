@@ -26,6 +26,7 @@ export class SignatureLineResult
     this.signatureType = signatureType;
     this.lineMatchStartsOn = lineMatchStartsOn;
     this.accessor = accessor;
+    this.preSignatureContent = [];
   }
 
   public static createFromSignatureLineResult(signature: string, signatureResult: SignatureLineResult)
@@ -145,6 +146,7 @@ export const isMethod = (signature: string | null | undefined): boolean =>
   return false;
 };
 
+
 const getFullBracketProperty = (line: string) =>
 {
   const regex = /public\s+\w+\s+[\w+\s*]*\{[\W\s]*get[\W\s]*\{[\W\s]*.*[\W\s]*\}[\W\s]*set[\W\s]*\{[\W\s]*.*[\W\s]*\}[\W\s]*/;
@@ -174,11 +176,16 @@ export const getMemberBodyByBrackets = (editor: TextEditor, signatureResult: Sig
   {
     startingLine = startingLine - signatureResult.preSignatureContent.length;
   }
+  const lineCount = editor.document.lineCount;
   let loop = true;
   let startTrackingBracketCounts = false;
   let bodyLines = [];
   while (loop)
   {
+    if (startingLine >= lineCount)
+    {
+      break;
+    }
     currentLine = editor.document.lineAt(startingLine).text;
     if (currentLine.indexOf("{") > -1)
     {
@@ -217,10 +224,15 @@ export const getMemberBodyBySemiColon = (editor: TextEditor, signatureResult: Si
   {
     startingLine = startingLine - signatureResult.preSignatureContent.length;
   }
+  const lineCount = editor.document.lineCount;
   let loop = true;
   let bodyLines = [];
   while (loop)
   {
+    if (startingLine >= lineCount)
+    {
+      break;
+    }
     currentLine = editor.document.lineAt(startingLine).text;
     if (currentLine.indexOf(";") > -1)
     {
@@ -249,8 +261,13 @@ export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, sta
 
   let sig: string | null = null;
   let lines: string | null = '';
+  const lineCount = editor.document.lineCount;
   while (lines.indexOf('{') === -1 && lines.indexOf(';') === -1)
   {
+    if (startingLine >= lineCount)
+    {
+      break;
+    }
     lines = lines + editor.document.lineAt(startingLine).text;
     startingLine++;
   }
@@ -293,7 +310,7 @@ export const getFullSignatureOfLine = (accessor: string, editor: TextEditor, sta
   let preSignatureStartingLine = documentStartingLine-1; //start at the line just above the signature
   let preSignatureText = [];
   let preSignatureLine: string | null = '';
-  while (true)
+  while (preSignatureStartingLine >= 0)
   {
     preSignatureLine = (editor.document.lineAt(preSignatureStartingLine).text || '').trim();
 

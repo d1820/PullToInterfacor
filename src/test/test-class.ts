@@ -238,6 +238,24 @@ namespace Sample
 }
 `;
 
+export const testFileWithAttribute = `using System;
+using System.Threading.Tasks;
+
+namespace Sample
+{
+    public class MyAnnotatedClass : IMyClass
+    {
+        [HttpGet]
+        public Task<int> AnnotatedMethod()
+        {
+            return Task.FromResult(1);
+        }
+        [HttpPost]
+        public int AnnotatedLambdaMethod => 5;
+    }
+}
+`;
+
 export const testAddLinesBetweenMembersExpected = `using System;
 using System.Collections.Generic;
 using System.Linq;
