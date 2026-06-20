@@ -116,7 +116,7 @@ const buildSubCommands = async (subcommands: string[], context: vscode.Extension
           {
             if (signatureResult.accessor === 'protected')
             {
-              vscode.window.showErrorMessage(`Unsupported pull. Protected members can not be pulled to an inteface. Please copy method manually`);
+              vscode.window.showErrorMessage(`Unsupported pull. Protected members can not be pulled to an interface. Please copy method manually`);
               return;
             }
             selectedFileDocumentContent = csharp.addMemberToDocument(subcommand, signatureResult, eol, selectedFileDocumentContent, true);
