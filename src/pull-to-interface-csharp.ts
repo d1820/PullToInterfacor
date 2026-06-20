@@ -81,11 +81,14 @@ export const getSignatureToPull = (editor: TextEditor, accessor: string): Signat
   {
     if (signature.signatureType === SignatureType.Method)
     {
-      return SignatureLineResult.createFromSignatureLineResult(`${signature.signature};`, signature);
+      const sig = signature.signature.replace(/\basync\s+/, '');
+      return SignatureLineResult.createFromSignatureLineResult(`${sig};`, signature);
     }
     if (signature.signatureType === SignatureType.FullProperty)
     {
-      return SignatureLineResult.createFromSignatureLineResult(`${signature.signature} { get; set; }`, signature);
+      const isReadOnly = !signature.originalSelectedLine?.includes('set;') && !signature.originalSelectedLine?.includes('set }');
+      const propertySuffix = isReadOnly ? '{ get; }' : '{ get; set; }';
+      return SignatureLineResult.createFromSignatureLineResult(`${signature.signature} ${propertySuffix}`, signature);
     }
     return SignatureLineResult.createFromSignatureLineResult(`${signature.signature} { get; }`, signature);
   }
@@ -128,7 +131,7 @@ export const addMemberToDocument = (subcommand: string,
   }
   else
   {
-    regEx = new RegExp(`(.*class\\s*${subcommand}.*[\\s]*{)`);
+    regEx = new RegExp(`(.*class\\s*${subcommand}\\b.*[\\s]*{)`);
   }
 
   const documentMatchedMember = documentFileContent!.match(regEx);
@@ -148,7 +151,8 @@ export const addMemberToDocument = (subcommand: string,
     }
     else
     {
-      newText = `${originalText}${eol}${signatureResult.signature}${eol}`;
+      const totalLength = signatureResult.signature.length + beginningIndent + indent;
+      newText = `${originalText}${eol}${signatureResult.signature.padStart(totalLength, ' ')}${eol}`;
     }
 
     documentFileContent = documentFileContent!.replace(regEx, newText);
